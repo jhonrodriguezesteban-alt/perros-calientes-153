@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perros Calientes 153 — Caso de Negocio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mostaza:#E8A33D;
+    --rojo:#C1391E;
+    --carbon:#211A17;
+    --crema:#FBF3E7;
+    --verde:#5C7A4E;
+    --linea: rgba(33,26,23,0.12);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--crema);
+    color:var(--carbon);
+    line-height:1.5;
+  }
+  h1,h2,h3,.display{
+    font-family:'Anton',sans-serif;
+    font-weight:400;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    line-height:0.95;
+  }
+  section{
+    padding:100px 8vw;
+    max-width:1200px;
+    margin:0 auto;
+  }
+  .hero{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    background:var(--carbon);
+    color:var(--crema);
+    padding:8vw;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::before{
+    content:"";
+    position:absolute;
+    right:-10%;
+    top:-20%;
+    width:600px;
+    height:600px;
+    border-radius:50%;
+    background:radial-gradient(circle, var(--rojo) 0%, transparent 70%);
+    opacity:0.5;
+  }
+  .hero .tag{
+    color:var(--mostaza);
+    font-weight:700;
+    font-size:0.95rem;
+    letter-spacing:2px;
+    margin-bottom:24px;
+    position:relative;
+  }
+  .hero h1{
+    font-size:clamp(3rem,9vw,7rem);
+    max-width:900px;
+    position:relative;
+  }
+  .hero .sub{
+    margin-top:28px;
+    font-size:1.25rem;
+    max-width:560px;
+    color:rgba(251,243,231,0.75);
+    position:relative;
+  }
+  .hero .loc{
+    margin-top:48px;
+    display:flex;
+    gap:40px;
+    flex-wrap:wrap;
+    position:relative;
+  }
+  .hero .loc div{ font-size:0.85rem; color:rgba(251,243,231,0.55); text-transform:uppercase; letter-spacing:1px;}
+  .hero .loc strong{ display:block; font-size:1.4rem; color:var(--crema); font-family:'Anton',sans-serif; text-transform:none; letter-spacing:0; margin-top:4px;}
+
+  .kicker{
+    font-size:0.85rem;
+    font-weight:700;
+    color:var(--rojo);
+    letter-spacing:1px;
+    margin-bottom:14px;
+  }
+  h2.section-title{
+    font-size:clamp(2rem,4.5vw,3.2rem);
+    max-width:720px;
+    margin-bottom:20px;
+  }
+  .lead{
+    font-size:1.15rem;
+    max-width:640px;
+    color:rgba(33,26,23,0.75);
+    margin-bottom:56px;
+  }
+
+  /* Oportunidad */
+  .stat-row{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:1px;
+    background:var(--linea);
+    border:1px solid var(--linea);
+    margin-top:20px;
+  }
+  .stat{
+    background:var(--crema);
+    padding:32px 24px;
+  }
+  .stat .num{
+    font-family:'Anton',sans-serif;
+    font-size:2.6rem;
+    color:var(--rojo);
+  }
+  .stat .label{
+    font-size:0.9rem;
+    color:rgba(33,26,23,0.65);
+    margin-top:6px;
+  }
+
+  /* Menu */
+  .menu-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:24px;
+    margin-top:20px;
+  }
+  .menu-card{
+    border:2px solid var(--carbon);
+    padding:28px;
+    background:var(--crema);
+  }
+  .menu-card.destacado{
+    background:var(--carbon);
+    color:var(--crema);
+    border-color:var(--carbon);
+  }
+  .menu-card .precio{
+    font-family:'Anton',sans-serif;
+    font-size:2.4rem;
+    color:var(--rojo);
+    margin:10px 0;
+  }
+  .menu-card.destacado .precio{ color:var(--mostaza);}
+  .menu-card .desc{ font-size:0.95rem; opacity:0.8; margin-bottom:14px;}
+  .menu-card .margen{
+    font-size:0.85rem;
+    border-top:1px solid var(--linea);
+    padding-top:12px;
+    display:flex;
+    justify-content:space-between;
+  }
+  .menu-card.destacado .margen{ border-top-color:rgba(251,243,231,0.2);}
+
+  /* Tables */
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:24px;
+    font-size:0.95rem;
+  }
+  th{
+    text-align:left;
+    padding:12px 16px;
+    background:var(--carbon);
+    color:var(--crema);
+    font-weight:600;
+    font-size:0.85rem;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  td{
+    padding:14px 16px;
+    border-bottom:1px solid var(--linea);
+  }
+  tr:last-child td{ font-weight:700; background:rgba(232,163,61,0.15);}
+  .num-cell{ text-align:right; font-variant-numeric:tabular-nums;}
+
+  /* PE box */
+  .pe-box{
+    background:var(--carbon);
+    color:var(--crema);
+    padding:56px;
+    margin-top:20px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:40px;
+    align-items:center;
+  }
+  .pe-box .big{
+    font-family:'Anton',sans-serif;
+    font-size:4.5rem;
+    color:var(--mostaza);
+    line-height:1;
+  }
+  .pe-box .big span{ font-size:1.4rem; display:block; color:var(--crema); opacity:0.7; margin-top:8px; font-family:'Inter',sans-serif; text-transform:none; letter-spacing:0;}
+  .bar-chart{ margin-top:20px;}
+  .bar-row{ display:flex; align-items:center; gap:14px; margin-bottom:10px;}
+  .bar-row .bl{ width:70px; font-size:0.8rem; text-align:right; opacity:0.7;}
+  .bar-track{ flex:1; background:rgba(251,243,231,0.12); height:22px; position:relative;}
+  .bar-fill{ height:100%; background:var(--mostaza);}
+  .bar-fill.neg{ background:var(--rojo);}
+  .bar-val{ font-size:0.75rem; margin-left:8px; white-space:nowrap;}
+
+  /* Projection */
+  .proj-chart{
+    display:flex;
+    align-items:flex-end;
+    gap:8px;
+    height:280px;
+    margin-top:40px;
+    padding:0 4px;
+    border-bottom:2px solid var(--carbon);
+  }
+  .proj-bar-wrap{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-end;
+    height:100%;
+  }
+  .proj-bar{
+    width:100%;
+    background:linear-gradient(180deg, var(--mostaza), var(--rojo));
+  }
+  .proj-bar.neg{ background:rgba(33,26,23,0.25);}
+  .proj-label{ font-size:0.7rem; margin-top:8px; color:rgba(33,26,23,0.6);}
+  .proj-val{ font-size:0.68rem; margin-bottom:6px; font-weight:700;}
+
+  .callout{
+    border-left:4px solid var(--verde);
+    padding:18px 24px;
+    background:rgba(92,122,78,0.08);
+    margin-top:32px;
+    font-size:0.95rem;
+  }
+  .callout strong{ color:var(--verde);}
+
+  /* Investment */
+  .inv-total{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    background:var(--rojo);
+    color:var(--crema);
+    padding:24px 28px;
+    margin-top:24px;
+  }
+  .inv-total .amt{ font-family:'Anton',sans-serif; font-size:2.2rem;}
+
+  /* Viral strategy */
+  .strat-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:2px;
+    background:var(--linea);
+    border:1px solid var(--linea);
+    margin-top:24px;
+  }
+  .strat-card{
+    background:var(--crema);
+    padding:28px 24px;
+  }
+  .strat-card h3{
+    font-size:1.15rem;
+    color:var(--rojo);
+    margin-bottom:10px;
+    text-transform:none;
+    font-family:'Inter',sans-serif;
+    font-weight:800;
+  }
+  .strat-card p{ font-size:0.9rem; color:rgba(33,26,23,0.75);}
+
+  footer{
+    background:var(--carbon);
+    color:rgba(251,243,231,0.5);
+    text-align:center;
+    padding:40px;
+    font-size:0.85rem;
+  }
+
+  @media(max-width:720px){
+    section{ padding:70px 6vw;}
+    .menu-grid{ grid-template-columns:1fr;}
+    .pe-box{ grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="tag">Caso de negocio — Contenedor gastronómico</div>
+  <h1>Perros<br>calientes<br>153</h1>
+  <p class="sub">Evaluación de viabilidad para un contenedor de perros calientes gourmet en Calle 153 con Autopista Norte, Bogotá — sin competencia directa de categoría en el punto.</p>
+  <div class="loc">
+    <div>Ubicación<strong>Bajada puente 153, costado oriental</strong></div>
+    <div>Formato<strong>Contenedor 2×2 m</strong></div>
+    <div>Arriendo<strong>$2.500.000/mes</strong></div>
+  </div>
+</div>
+
+<section>
+  <div class="kicker">La oportunidad</div>
+  <h2 class="section-title">Alto tráfico peatonal, cero perros calientes en la esquina</h2>
+  <p class="lead">La zona ya tiene contenedores de comida operando en la bajada del puente. Se esperan 4 opciones adicionales de comida, pero ninguna basada en perro caliente — no hay competencia directa de categoría en ese punto exacto.</p>
+  <div class="stat-row">
+    <div class="stat"><div class="num">2</div><div class="label">Picos de tráfico diarios (almuerzo y salida)</div></div>
+    <div class="stat"><div class="num">0</div><div class="label">Competidores directos de perros calientes</div></div>
+    <div class="stat"><div class="num">4</div><div class="label">Otros contenedores de comida en la zona</div></div>
+    <div class="stat"><div class="num">2×2m</div><div class="label">Solo instalación eléctrica — sin gas</div></div>
+  </div>
+</section>
+
+<section>
+  <div class="kicker">Producto</div>
+  <h2 class="section-title">Menú con topping bar como diferenciador</h2>
+  <p class="lead">Cocción en máquina de rodillos eléctrica: además de resolver la falta de gas, funciona como vitrina viva que atrae al peatón por impulso.</p>
+  <div class="menu-grid">
+    <div class="menu-card">
+      <div>Perro Sencillo</div>
+      <div class="precio">$7.000</div>
+      <div class="desc">Salchicha básica + topping bar (salsas, papitas, cebolla, queso)</div>
+      <div class="margen"><span>Margen</span><strong>$4.100 · 59%</strong></div>
+    </div>
+    <div class="menu-card">
+      <div>Perro Americano</div>
+      <div class="precio">$9.500</div>
+      <div class="desc">Salchicha premium tipo americana + queso + toppings completos</div>
+      <div class="margen"><span>Margen</span><strong>$5.200 · 55%</strong></div>
+    </div>
+    <div class="menu-card">
+      <div>Combo Sencillo</div>
+      <div class="precio">$10.000</div>
+      <div class="desc">Perro sencillo + gaseosa</div>
+      <div class="margen"><span>Margen</span><strong>$5.500 · 55%</strong></div>
+    </div>
+    <div class="menu-card">
+      <div>Combo Completo</div>
+      <div class="precio">$13.000</div>
+      <div class="desc">Perro americano + papas + gaseosa</div>
+      <div class="margen"><span>Margen</span><strong>$5.650 · 43%</strong></div>
+    </div>
+    <div class="menu-card destacado" style="grid-column:1/-1">
+      <div>Combo Amigos — 2 perros + 2 gaseosas</div>
+      <div class="precio">$16.000</div>
+      <div class="desc">Diseñado para generar dos ventas en una sola decisión — ahorro de $2.000 vs. comprar por separado, sin sacrificar margen</div>
+      <div class="margen"><span>Margen</span><strong>$7.800 por transacción · el más alto en pesos absolutos</strong></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="kicker">Inversión inicial</div>
+  <h2 class="section-title">Equipar el contenedor (2×2 m, solo luz y agua)</h2>
+  <table>
+    <tr><th>Ítem</th><th class="num-cell">Costo</th></tr>
+    <tr><td>Máquina asadora de salchichas eléctrica (roller grill, 7 rodillos)</td><td class="num-cell">$650.000</td></tr>
+    <tr><td>Vitrina calienta-panes</td><td class="num-cell">$350.000</td></tr>
+    <tr><td>Nevera / congelador comercial compacto</td><td class="num-cell">$1.300.000</td></tr>
+    <tr><td>Freidora eléctrica de mesón (papas)</td><td class="num-cell">$450.000</td></tr>
+    <tr><td>Mesón / barra en acero inoxidable + adecuación interna</td><td class="num-cell">$2.200.000</td></tr>
+    <tr><td>Dispensadores de salsas y toppings</td><td class="num-cell">$150.000</td></tr>
+    <tr><td>Utensilios de cocina (pinzas, tablas, cuchillos, guantes)</td><td class="num-cell">$250.000</td></tr>
+    <tr><td>Datáfono + tablet para pedidos y pagos digitales</td><td class="num-cell">$450.000</td></tr>
+    <tr><td>Rótulo, toldo, branding y vinilos</td><td class="num-cell">$700.000</td></tr>
+    <tr><td>Instalación eléctrica (breakers, tomas, cableado)</td><td class="num-cell">$350.000</td></tr>
+    <tr><td>Extintor, botiquín y señalización</td><td class="num-cell">$150.000</td></tr>
+    <tr><td>Menaje varios (bandejas, canastillas)</td><td class="num-cell">$200.000</td></tr>
+    <tr><td><strong>Subtotal equipamiento (activo fijo)</strong></td><td class="num-cell"><strong>$7.200.000</strong></td></tr>
+    <tr><td>Inventario inicial de insumos (primera semana)</td><td class="num-cell">$900.000</td></tr>
+    <tr><td>Caja menor / imprevistos de arranque</td><td class="num-cell">$700.000</td></tr>
+  </table>
+  <div class="inv-total">
+    <div>Inversión inicial total</div>
+    <div class="amt">$8.800.000</div>
+  </div>
+  <p class="callout"><strong>Amortización:</strong> el equipamiento ($7.200.000) se deprecia a 24 meses de vida útil → <strong>$300.000/mes</strong>, incluidos en costos fijos para tener control contable real, aunque no representan salida de caja mes a mes.</p>
+</section>
+
+<section>
+  <div class="kicker">Estructura de costos</div>
+  <h2 class="section-title">Costos fijos mensuales</h2>
+  <table>
+    <tr><th>Concepto</th><th class="num-cell">Valor mensual</th></tr>
+    <tr><td>Arriendo (incluye servicios: luz y agua)</td><td class="num-cell">$2.500.000</td></tr>
+    <tr><td>Empleado tiempo completo (salario + prestaciones + parafiscales)</td><td class="num-cell">$3.000.000</td></tr>
+    <tr><td>Otros fijos (aseo, seguro)</td><td class="num-cell">$300.000</td></tr>
+    <tr><td>Amortización inversión inicial</td><td class="num-cell">$300.000</td></tr>
+    <tr><td>Total costos fijos</td><td class="num-cell">$6.100.000</td></tr>
+  </table>
+  <p class="callout">El colchón de imprevistos se maneja como <strong>5% variable sobre cada venta</strong>, no como costo fijo — escala con el negocio en vez de castigar los meses de arranque.</p>
+</section>
+
+<section>
+  <div class="kicker">Punto de equilibrio</div>
+  <h2 class="section-title">¿Cuánto hay que vender para cubrir costos?</h2>
+  <div class="pe-box">
+    <div>
+      <div class="big">1.110<span>transacciones al mes</span></div>
+      <div class="big" style="margin-top:24px;">37-43<span>unidades por día</span></div>
+      <div class="big" style="margin-top:24px;">$12,77M<span>ingresos mensuales de equilibrio</span></div>
+    </div>
+    <div class="bar-chart">
+      <div class="bar-row"><div class="bl">15/día</div><div class="bar-track"><div class="bar-fill neg" style="width:20%"></div></div><div class="bar-val">-$4,0M</div></div>
+      <div class="bar-row"><div class="bl">25/día</div><div class="bar-track"><div class="bar-fill neg" style="width:38%"></div></div><div class="bar-val">-$2,4M</div></div>
+      <div class="bar-row"><div class="bl">40/día (PE)</div><div class="bar-track"><div class="bar-fill" style="width:52%"></div></div><div class="bar-val">≈ $0</div></div>
+      <div class="bar-row"><div class="bl">50/día</div><div class="bar-track"><div class="bar-fill" style="width:65%"></div></div><div class="bar-val">+$1,7M</div></div>
+      <div class="bar-row"><div class="bl">60/día</div><div class="bar-track"><div class="bar-fill" style="width:80%"></div></div><div class="bar-val">+$3,3M</div></div>
+      <div class="bar-row"><div class="bl">80/día</div><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><div class="bar-val">+$6,6M</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="kicker">Proyección a 12 meses</div>
+  <h2 class="section-title">Flujo de caja acumulado y recuperación de inversión</h2>
+  <p class="lead">Escenario de rampa realista: arranque a 20/día en el mes 1, hasta consolidar 60/día desde el mes 7. Incluye la inversión inicial de $8.800.000 como salida en el mes 0.</p>
+  <div class="proj-chart" id="chart">
+    <div class="proj-bar-wrap"><div class="proj-val">-11,3M</div><div class="proj-bar neg" style="height:41%"></div><div class="proj-label">M1</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">-12,2M</div><div class="proj-bar neg" style="height:44%"></div><div class="proj-label">M2</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">-11,4M</div><div class="proj-bar neg" style="height:41%"></div><div class="proj-label">M3</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">-8,9M</div><div class="proj-bar neg" style="height:32%"></div><div class="proj-label">M4</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">-6,5M</div><div class="proj-bar neg" style="height:24%"></div><div class="proj-label">M5</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">-4,0M</div><div class="proj-bar neg" style="height:14%"></div><div class="proj-label">M6</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">+0,1M</div><div class="proj-bar" style="height:4%"></div><div class="proj-label">M7</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">+4,2M</div><div class="proj-bar" style="height:20%"></div><div class="proj-label">M8</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">+8,3M</div><div class="proj-bar" style="height:36%"></div><div class="proj-label">M9</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">+12,4M</div><div class="proj-bar" style="height:52%"></div><div class="proj-label">M10</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">+16,5M</div><div class="proj-bar" style="height:68%"></div><div class="proj-label">M11</div></div>
+    <div class="proj-bar-wrap"><div class="proj-val">+20,6M</div><div class="proj-bar" style="height:84%"></div><div class="proj-label">M12</div></div>
+  </div>
+  <p class="callout"><strong>Punto de recuperación de la inversión: mes 7</strong> — a partir de ahí, cada mes en régimen de 60 unidades/día deja cerca de $4,1M de caja libre.</p>
+</section>
+
+<section>
+  <div class="kicker">Estrategia viral</div>
+  <h2 class="section-title">Sin competencia directa de categoría en el punto</h2>
+  <p class="lead">No se compite por precio: se compite por ser el primero y el más memorable en la esquina.</p>
+  <div class="strat-grid">
+    <div class="strat-card">
+      <h3>Vitrina viva</h3>
+      <p>El roller grill de cara al peatón, con luz LED — reemplaza el "olor a parrilla" que no existe sin gas, generando el mismo efecto de atracción por impulso.</p>
+    </div>
+    <div class="strat-card">
+      <h3>Arma tu perro</h3>
+      <p>Topping bar visible (salsas, papitas, cebolla, queso) diseñado para generar fotos y reels sin pagar publicidad.</p>
+    </div>
+    <div class="strat-card">
+      <h3>Reto de lanzamiento</h3>
+      <p>Primeros clientes con foto/reseña en redes acceden al Combo Completo al precio del Combo Sencillo — motor de contenido orgánico inicial.</p>
+    </div>
+    <div class="strat-card">
+      <h3>Combo Amigos</h3>
+      <p>2 perros + 2 gaseosas a $16.000 empuja la compra en pareja — el ticket con mayor margen en pesos absolutos del menú.</p>
+    </div>
+    <div class="strat-card">
+      <h3>Fila exprés digital</h3>
+      <p>Pago 100% Nequi/Daviplata/QR — cero efectivo, cero fila — clave en un punto de paso rápido de peatones.</p>
+    </div>
+    <div class="strat-card">
+      <h3>Doble pico horario</h3>
+      <p>Menú y personal ajustados a almuerzo (12-2pm) y salida de oficina/TransMilenio (5-8pm), los dos momentos reales de tráfico.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Caso de negocio preparado para evaluación de socios — Perros Calientes 153, Bogotá
+</footer>
+
+</body>
+</html>
