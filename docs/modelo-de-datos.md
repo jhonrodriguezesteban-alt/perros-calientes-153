@@ -1,36 +1,32 @@
 # Modelo de datos — Bendito Perro Caliente
 
-Propuesta para revisar antes de escribir la app. El SQL completo y ejecutable está en
-[`supabase/migrations/20260923000000_modelo_inicial.sql`](../supabase/migrations/20260923000000_modelo_inicial.sql)
-y hay datos de ejemplo (precios provisionales) en [`supabase/seed.sql`](../supabase/seed.sql).
+SQL completo y ejecutable:
+[`supabase/migrations/20260923000000_modelo_inicial.sql`](../supabase/migrations/20260923000000_modelo_inicial.sql).
+Datos de arranque (precios, recetas y costos **provisionales**): [`supabase/seed.sql`](../supabase/seed.sql).
 
-## Roles: misma tabla, no tabla aparte
+## Roles
 
-Recomiendo **una columna `rol` en `perfiles`** (`empleado` | `socio`), no una tabla de roles.
-Son 3 personas y 2 roles fijos; una tabla de roles/permisos solo añade joins y pantallas
-de administración que nadie va a usar. Si algún día hace falta un tercer rol (ej. "cajero
-de fin de semana"), se agrega un valor al enum sin reestructurar nada.
-
-- `perfiles` se crea solo cuando se crea el usuario en Supabase Auth (trigger). Nace como `empleado`.
-- Los socios se marcan como `socio` una vez (SQL o pantalla de admin).
-- Hay que **desactivar el registro público** en Supabase Auth: los usuarios los crean los socios.
-- Si la empleada se va, se pone `activo = false` y pierde acceso de inmediato.
+Una columna `rol` en `perfiles` (`empleado` | `socio`). El perfil se crea solo al crear
+el usuario en Supabase Auth y nace como `empleado`. El registro público de Supabase Auth
+debe estar **desactivado**: los usuarios los crean los socios. `activo = false` corta el
+acceso de inmediato.
 
 ## Diagrama
 
 ```mermaid
 erDiagram
   perfiles ||--o{ ventas : vende
+  perfiles ||--o{ turnos : "abre/cierra"
+  turnos ||--o{ ventas : agrupa
   categorias ||--o{ productos : agrupa
-  productos ||--o{ combo_cupos : "combo tiene"
   productos ||--o{ producto_toppings : ofrece
   toppings ||--o{ producto_toppings : ""
-  productos ||--o{ receta_items : "receta"
+  productos ||--o{ receta_items : receta
   insumos ||--o{ receta_items : ""
-  toppings ||--o{ topping_insumos : "porción"
+  toppings ||--o{ topping_insumos : porción
   insumos ||--o{ topping_insumos : ""
+  insumos ||--o{ historial_costos : auditoría
   ventas ||--o{ venta_items : contiene
-  venta_items ||--o{ venta_items : "hijos de combo"
   venta_items ||--o{ venta_item_toppings : lleva
   ventas ||--o{ movimientos_inventario : descuenta
   insumos ||--o{ movimientos_inventario : ""
@@ -39,7 +35,6 @@ erDiagram
   gastos ||--o| compras : ""
   categorias_gasto ||--o{ gastos : clasifica
   perfiles ||--o{ aportes_socios : aporta
-  perfiles ||--o{ gastos : "cuota recuperación"
 ```
 
 ## Tablas
@@ -47,95 +42,77 @@ erDiagram
 ### Catálogo de venta (lo lee el POS)
 | Tabla | Para qué |
 |---|---|
-| `categorias` | Pestañas del POS: Perros, Combos, Bebidas… |
-| `productos` | Nombre, precio, `tipo` (`perro` / `bebida` / `acompanamiento` / `combo`). El `tipo` alimenta la tasa de adjunción. |
-| `combo_cupos` | Qué trae un combo. Un cupo es un producto fijo ("Perro básico") o "cualquiera de una categoría" ("una bebida"). Combo Amigos = cupo Perro ×2 + cupo Bebida ×2. |
-| `toppings` | Cebolla, tomate, pepinillo, papa, salsa de huevo, mostaza, queso + premium. |
-| `producto_toppings` | Qué toppings ofrece cada perro, cuáles vienen marcados por defecto y cuánto cuestan de más **en ese perro** (el guacamole puede venir incluido en el mexicano y cobrarse en el básico). |
+| `categorias` | Pestañas del POS: Perros, Bebidas… |
+| `productos` | Nombre, precio, `tipo` (`perro` / `bebida` / `acompanamiento`). No hay combos: la bebida es otra línea de la misma venta. |
+| `toppings` | Clásicos (cebolla, tomate, pepinillo, papa, salsa de huevo, mostaza, queso) y premium. |
+| `producto_toppings` | Qué toppings ofrece cada perro, si vienen **premarcados** (los clásicos sí, los premium no) y su precio extra **en ese perro**. |
 
 ### Inventario (solo socios)
 | Tabla | Para qué |
 |---|---|
-| `insumos` | Nombre, unidad (`g` / `ml` / `und`), costo por unidad, `stock_actual`, `stock_minimo`. |
-| `receta_items` | Receta base del producto: 1 pan + 1 salchicha + 1 bandeja. |
-| `topping_insumos` | Lo que gasta una porción de topping: queso = 20 g. |
-| `movimientos_inventario` | **Libro de todo lo que entra y sale** (compra, consumo por venta, reverso, ajuste, merma). `stock_actual` se actualiza solo por trigger. De aquí sale el reporte de consumo por rango de fechas y "consumido vs. comprado". |
-| `compras` / `compra_items` | Compra de insumos: suma stock y recalcula el costo del insumo por **promedio ponderado**. Se puede ligar al `gasto` correspondiente para no registrar dos veces. |
+| `insumos` | Unidad (`g` / `ml` / `und`), costo promedio, stock actual y mínimo. El stock no se edita a mano: solo se mueve con movimientos. |
+| `receta_items` / `topping_insumos` | Receta base del producto y consumo de cada porción de topping. |
+| `movimientos_inventario` | Libro de entradas y salidas: `inicial`, `compra`, `consumo_venta`, `reverso_venta`, `ajuste`, `merma`. De aquí salen el stock y el reporte de consumo vs. compras. |
+| `compras` / `compra_items` | Cada compra suma stock y recalcula el **costo promedio ponderado**: `(stock × costo actual + costo de la compra) ÷ (stock + cantidad comprada)`. |
+| `historial_costos` | Registro de cada cambio de costo, con origen (`compra` / `manual`), motivo, quién y cuándo. El ajuste manual solo se puede hacer con `ajustar_costo_insumo(...)` y motivo; un cambio directo se rechaza. |
 
-### Ventas
+### Ventas y caja
 | Tabla | Para qué |
 |---|---|
-| `ventas` | Encabezado: método de pago, total, comisión datáfono, costo de insumos, quién vendió, `vendida_en` (hora de la tablet) y `registrada_en` (hora de llegada al servidor), estado (`completada` / `anulada`). |
-| `venta_items` | Una línea por producto. Si es combo, los perros y la bebida del combo quedan como líneas hijas (precio 0) para que sus toppings y su consumo cuenten igual. Guarda precio y costo **del momento**. |
-| `venta_item_toppings` | Toppings de cada línea → "top de toppings". |
+| `ventas` | Método de pago, total, comisión datáfono (1,5 %), costo de insumos, turno, `vendida_en` (hora de la tablet) y `registrada_en` (llegada al servidor). Si está anulada, el motivo es obligatorio (lo exige la base de datos). |
+| `venta_items` / `venta_item_toppings` | Líneas y toppings con precio y costo del momento. |
+| `turnos` | Base inicial, ventas en efectivo del turno, efectivo esperado, efectivo contado y **diferencia**. Solo puede haber un turno abierto. |
 
 ### Gastos e inversión (solo socios)
 | Tabla | Para qué |
 |---|---|
-| `categorias_gasto` | Cada categoría tiene `tipo`: `fijo` (arriendo, nómina), `variable` (insumos, empaques) o `inversion` (equipos, cuota de recuperación a socios). |
-| `gastos` | Fecha, categoría, monto, descripción, quién lo registró, comprobante (foto en Storage) y, si es cuota de recuperación, a qué socio. |
-| `aportes_socios` | Lo que puso cada socio. Saldo por recuperar = aportes − cuotas pagadas. |
-| `parametros` | Valores con fecha de vigencia: % comisión Bold, cargo fijo, IVA sobre comisión, colchón de imprevistos (5 %), cuota de recuperación… Si Bold cambia tarifa, se agrega una fila nueva y el histórico no se altera. |
+| `categorias_gasto` / `gastos` | Tipo `fijo`, `variable` o `inversion`; monto, fecha, quién registró, comprobante, y socio si es una cuota de recuperación pagada. |
+| `planes_recuperacion` | Inversión a recuperar, número de meses y mes de inicio. Cuota = monto ÷ meses, y solo aplica dentro de esos meses. |
+| `aportes_socios` | Cuánto puso cada socio (para repartir las cuotas). |
+| `parametros` | Valores con vigencia: comisión Bold 1,5 %, % merma, días de operación, nómina, arriendo, y estimados para meses sin ventas. Cambiar un valor = fila nueva con fecha, sin alterar el histórico. |
 
-## Cómo se registra una venta
+## Reglas de negocio implementadas
 
-Una sola función `registrar_venta(payload)` en la base de datos, **atómica**: o se guarda
-todo (venta, líneas, toppings, descuento de inventario, comisión) o nada.
+- **Registrar venta** (`registrar_venta`): atómica e idempotente (la tablet genera el UUID;
+  si reintenta, no se duplica). Precios del servidor. Descuenta receta + toppings. Asigna el
+  turno en que cayó la venta. Nunca bloquea una venta por stock (puede quedar negativo).
+- **Anular** (`anular_venta`): motivo siempre obligatorio. La empleada puede anular **sus**
+  ventas durante los 5 minutos siguientes a registrarlas; después, solo un socio. Devuelve el
+  inventario.
+- **Caja**: `abrir_turno(base)`, `turno_actual()`, `cerrar_turno(contado, notas)`. El conteo es
+  a ciegas: la empleada cuenta sin ver cuánto "debería" haber, y al cerrar ve el cuadre.
+- **Seguridad (RLS)**: la empleada solo lee el catálogo y usa esas funciones; ventas del día y
+  alertas de stock sin costos. Los socios ven todo.
+- **Tiempo real**: `ventas`, `gastos`, `insumos` y `turnos` publicados en Realtime (solo los
+  socios reciben eventos).
 
-1. La tablet genera el `id` (UUID) de la venta **antes** de enviarla.
-2. Si no hay internet, la venta se guarda en la tablet (IndexedDB) y se reintenta sola.
-3. Si el reintento llega dos veces, el mismo `id` hace que la segunda vez devuelva la venta ya
-   guardada en vez de duplicarla.
-4. Los precios los pone el servidor, no la tablet.
-5. Descuenta insumos = receta de cada línea + toppings elegidos.
-6. **El inventario puede quedar en negativo**: nunca se bloquea una venta porque el
-   sistema "cree" que no hay queso. Un negativo es señal de que falta registrar una compra
-   o ajustar la receta.
+## Punto de equilibrio — `punto_equilibrio(mes)`
 
-Anular una venta (`anular_venta`) es solo para socios, pide motivo y devuelve el inventario.
+Tal cual la fórmula de la calculadora:
 
-## Seguridad (RLS)
+```
+costo por perro   = insumos de la receta × (1 + % merma)
+                    + precio × % comisión datáfono × % ventas con datáfono
+margen por perro  = precio − costo por perro
+margen bebida     = (precio bebida − costo bebida) × % ventas que incluyen bebida
+margen combinado  = margen por perro + margen bebida
+cuota recuperación= inversión ÷ meses   (solo dentro del plazo del plan)
+costos fijos      = nómina + arriendo + cuota recuperación
+PE unidades/mes   = costos fijos ÷ margen combinado
+PE unidades/día   = PE mes ÷ días de operación
+PE pesos/mes      = PE unidades × precio
+```
 
-- **Empleada**: lee el catálogo de venta (productos, precios, toppings). Vende con
-  `registrar_venta`. Ve "ventas de hoy" (sin costos, para cuadrar caja) y alertas de
-  stock bajo (solo nombre y cantidad, sin costos). No puede leer insumos, costos, gastos,
-  márgenes ni parámetros, ni siquiera llamando la API directamente.
-- **Socios**: todo.
-- Ventas e inventario **no se pueden escribir directo**, solo por las funciones.
+- Precio, costo, % datáfono y % con bebida salen de las **ventas reales del mes**
+  (promedio ponderado entre perros). Si el mes todavía no tiene ventas, usa catálogo y
+  parámetros estimados; el resultado indica `fuente`.
+- La cuota se evalúa según el mes consultado: al cumplirse el plazo sale sola de los costos
+  fijos y el PE baja (verificado: con los datos de ejemplo pasa de 50 a 44 perros/día en el
+  mes 13).
+- También devuelve el margen de contribución real acumulado en el mes y el % de avance
+  contra los costos fijos.
 
-## Tiempo real
+## Pendiente de datos reales
 
-`ventas`, `gastos` e `insumos` están publicados en Supabase Realtime. El dashboard escucha
-esos cambios y recalcula. Realtime respeta RLS: solo los socios reciben los eventos.
-
-## Métricas del dashboard: de dónde sale cada una
-
-| Métrica | Fuente |
-|---|---|
-| Ventas día/semana/mes | `ventas.total` (estado `completada`), agrupado en hora de Bogotá |
-| Margen de contribución | `total − costo_insumos − comision_datafono − colchón %` |
-| Punto de equilibrio | gastos `fijo` del mes (+ cuota de recuperación) ÷ margen unitario — **pendiente tu fórmula exacta** |
-| Ventas por hora | `ventas.vendida_en` |
-| Top toppings | `venta_item_toppings` |
-| Tasa de adjunción de bebidas | ventas con ≥1 línea `bebida` ÷ ventas con ≥1 línea `perro` (combos incluidos) |
-| Efectivo vs. datáfono | `ventas.metodo_pago` |
-| Consumo por insumo | `movimientos_inventario` tipo `consumo_venta` − `reverso_venta`, vs. tipo `compra` |
-
-Las consultas del dashboard se harán como funciones SQL en la siguiente fase, cuando
-tengamos tu lógica de costeo.
-
-## Decisiones que necesito que confirmes
-
-1. **Punto de equilibrio y cuota de recuperación**: pásame la fórmula de tu calculadora.
-   Por ahora el modelo guarda todos los insumos para calcularla (costos fijos vía gastos,
-   comisión por venta, colchón %, aportes y cuotas por socio).
-2. **Tarifa Bold QR**: % y cargo fijo reales (quedaron en 0 en `parametros`).
-3. **Combos**: ¿los mantienen (Sencillo, Amigos…)? El modelo ya los soporta con bebida a elección.
-4. **Costo de insumos**: propuse promedio ponderado automático al registrar compras.
-   ¿Prefieren último precio de compra o costo fijo editado a mano?
-5. **Anulaciones**: ¿solo socios, o la empleada puede anular una venta recién hecha
-   (ej. dentro de 5 minutos) por error de digitación?
-6. **Cierre de caja**: ¿quieren un registro de turno (base inicial, efectivo contado al
-   cierre, diferencia)? Es una tabla más y ayuda mucho a controlar efectivo.
-7. **Toppings "por defecto"**: asumí que en el básico todos los clásicos vienen marcados y la
-   empleada desmarca ("sin cebolla"). ¿Así funciona en el mostrador?
+Precios, recetas, costos de insumos, % de merma y el plan de recuperación (monto, meses,
+fecha de inicio) están con valores provisionales en `seed.sql`.

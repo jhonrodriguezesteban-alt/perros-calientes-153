@@ -2,21 +2,13 @@
 -- PROVISIONALES: reemplazar con los de la calculadora de costeo.
 
 insert into categorias (nombre, orden) values
-  ('Perros', 1), ('Combos', 2), ('Bebidas', 3);
+  ('Perros', 1), ('Bebidas', 2);
 
 insert into productos (categoria_id, nombre, tipo, precio, orden) values
   ((select id from categorias where nombre = 'Perros'),  'Perro básico',        'perro',  7000, 1),
   ((select id from categorias where nombre = 'Perros'),  'Perro mexicano',      'perro',  9500, 2),
   ((select id from categorias where nombre = 'Bebidas'), 'Gaseosa 400 ml',      'bebida', 3500, 1),
-  ((select id from categorias where nombre = 'Bebidas'), 'Agua 600 ml',         'bebida', 2500, 2),
-  ((select id from categorias where nombre = 'Combos'),  'Combo sencillo',      'combo', 10000, 1),
-  ((select id from categorias where nombre = 'Combos'),  'Combo amigos',        'combo', 16000, 2);
-
-insert into combo_cupos (combo_id, nombre, producto_id, categoria_id, cantidad) values
-  ((select id from productos where nombre = 'Combo sencillo'), 'Perro',  (select id from productos where nombre = 'Perro básico'), null, 1),
-  ((select id from productos where nombre = 'Combo sencillo'), 'Bebida', null, (select id from categorias where nombre = 'Bebidas'), 1),
-  ((select id from productos where nombre = 'Combo amigos'),   'Perros', (select id from productos where nombre = 'Perro básico'), null, 2),
-  ((select id from productos where nombre = 'Combo amigos'),   'Bebidas', null, (select id from categorias where nombre = 'Bebidas'), 2);
+  ((select id from categorias where nombre = 'Bebidas'), 'Agua 600 ml',         'bebida', 2500, 2);
 
 insert into toppings (nombre, es_premium, orden) values
   ('Cebolla', false, 1), ('Tomate', false, 2), ('Pepinillo', false, 3), ('Papa ripio', false, 4),
@@ -29,9 +21,10 @@ select p.id, t.id, true, 0
   from productos p cross join toppings t
  where p.tipo = 'perro' and not t.es_premium;
 
--- Premium: incluidos en el mexicano; en el básico se cobran aparte.
+-- Premium: nunca premarcados (se agregan a mano). Sin costo extra en el
+-- mexicano; en el básico se cobran aparte.
 insert into producto_toppings (producto_id, topping_id, incluido_por_defecto, precio_extra)
-select p.id, t.id, p.nombre = 'Perro mexicano', case when p.nombre = 'Perro mexicano' then 0 else 1500 end
+select p.id, t.id, false, case when p.nombre = 'Perro mexicano' then 0 else 1500 end
   from productos p cross join toppings t
  where p.tipo = 'perro' and t.es_premium;
 
@@ -79,10 +72,17 @@ insert into categorias_gasto (nombre, tipo) values
   ('Insumos', 'variable'), ('Empaques', 'variable'), ('Mantenimiento', 'variable'),
   ('Equipos', 'inversion'), ('Cuota recuperación a socios', 'inversion');
 
--- Parámetros financieros: CONFIRMAR con la tarifa real de Bold y la calculadora.
+-- Parámetros financieros (vigentes desde el arranque). Nómina y arriendo del
+-- caso de negocio; merma, días y estimados son PROVISIONALES.
 insert into parametros (clave, vigente_desde, valor, descripcion) values
-  ('comision_datafono_pct',   '2026-01-01', 0,  'Comisión Bold QR en % sobre la venta (pendiente tarifa real)'),
-  ('comision_datafono_fija',  '2026-01-01', 0,  'Cargo fijo por transacción Bold, COP'),
-  ('iva_comision_pct',        '2026-01-01', 19, 'IVA sobre la comisión'),
-  ('colchon_imprevistos_pct', '2026-01-01', 5,  'Colchón de imprevistos como % variable de cada venta'),
-  ('cuota_recuperacion_mensual', '2026-01-01', 0, 'Cuota mensual de recuperación de inversión a socios (pendiente)');
+  ('comision_datafono_pct',        '2026-01-01', 1.5,     'Comisión Bold QR, % sobre la transacción (sin cargo fijo)'),
+  ('merma_pct',                    '2026-01-01', 5,       '% de merma sobre el costo de insumos de la receta'),
+  ('dias_operacion_mes',           '2026-01-01', 30,      'Días de operación al mes'),
+  ('nomina_mensual',               '2026-01-01', 3000000, 'Nómina mensual (salario + prestaciones + parafiscales)'),
+  ('arriendo_mensual',             '2026-01-01', 2500000, 'Arriendo mensual (incluye servicios)'),
+  ('pct_ventas_datafono_estimado', '2026-01-01', 50,      'Estimado de % de ventas por datáfono, solo si el mes no tiene ventas'),
+  ('tasa_adjuncion_estimada',      '2026-01-01', 30,      'Estimado de % de ventas con bebida, solo si el mes no tiene ventas');
+
+-- Plan de recuperación: PROVISIONAL (inversión del caso de negocio, 12 meses).
+insert into planes_recuperacion (descripcion, monto_total, meses, inicia_en) values
+  ('Inversión inicial', 8800000, 12, '2026-10-01');
