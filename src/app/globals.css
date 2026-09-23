@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* Marca Bendito Perro Caliente
+   Proporción: 55% crema · 25% café · 13% rojo · 7% mostaza.
+   Rojo y mostaza son acentos: precios, acciones, detalles. Nunca fondos grandes. */
+@theme {
+  --color-cafe: #4d1101;
+  --color-cafe-700: #6b2a17;
+  --color-cafe-300: #b89484;
+  --color-cafe-100: #eadbd2;
+  --color-rojo: #fd2322;
+  --color-rojo-700: #d11110;
+  --color-mostaza: #fda414;
+  --color-mostaza-100: #ffedc9;
+  --color-crema: #fff8f0;
+  --color-crema-200: #f7eadb;
+  --color-exito: #2f7d32;
+
+  --font-titulo: var(--font-baloo), system-ui, sans-serif;
+  --font-etiqueta: var(--font-poppins), system-ui, sans-serif;
+  --font-sans: var(--font-nunito), system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-crema);
+  color: var(--color-cafe);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* En la tablet, evitar selección accidental de texto y el zoom por doble toque */
+.tactil {
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.numeros {
+  font-variant-numeric: tabular-nums;
+}
