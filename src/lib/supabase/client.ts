@@ -1,11 +1,12 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { SUPABASE_KEY, SUPABASE_URL } from "./config";
 
 let cliente: ReturnType<typeof createBrowserClient> | undefined;
 
 export function supabaseNavegador() {
   cliente ??= createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL,
+    SUPABASE_KEY,
   );
   return cliente;
 }

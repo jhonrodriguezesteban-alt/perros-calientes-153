@@ -22,29 +22,42 @@ export function agregarLinea(lineas: LineaPedido[], producto: Producto, toppings
   return [...lineas, { clave, producto, toppings, cantidad }];
 }
 
-/** Toppings que el cliente pidió quitar ("sin cebolla") respecto a los premarcados. */
-export function toppingsQuitados(linea: LineaPedido) {
-  const elegidos = new Set(linea.toppings.map((t) => t.topping_id));
-  return linea.producto.toppings.filter((t) => t.incluido_por_defecto && !elegidos.has(t.topping_id));
-}
-
-/** Toppings agregados que no venían premarcados (premium, extras). */
-export function toppingsAgregados(linea: LineaPedido) {
-  return linea.toppings.filter((t) => !t.incluido_por_defecto);
+/** Grupos de variantes excluyentes del producto, en orden (ej. Papa, Queso). */
+export function gruposDe(producto: Producto) {
+  const grupos = new Map<string, ToppingDeProducto[]>();
+  for (const t of producto.toppings) {
+    if (!t.grupo) continue;
+    grupos.set(t.grupo, [...(grupos.get(t.grupo) ?? []), t]);
+  }
+  return [...grupos.entries()].map(([nombre, opciones]) => ({ nombre, opciones }));
 }
 
 export function resumenPedido(lineas: LineaPedido[]) {
   return lineas.map((l) => `${l.cantidad}× ${l.producto.nombre}`).join(", ");
 }
 
+/** Qué cambió respecto al perro "con todo": "sin mostaza · papa hojuela · + guacamole". */
 export function describirLinea(linea: LineaPedido) {
-  if (linea.producto.toppings.length === 0) return "";
-  const partes: string[] = [];
-  const quitados = toppingsQuitados(linea);
-  const agregados = toppingsAgregados(linea);
-  if (quitados.length === 0 && agregados.length === 0) return "Con todo";
+  const { producto } = linea;
+  if (producto.toppings.length === 0) return "";
   if (linea.toppings.length === 0) return "Sin toppings";
-  if (quitados.length) partes.push("sin " + quitados.map((t) => t.nombre.toLowerCase()).join(", "));
-  if (agregados.length) partes.push("+ " + agregados.map((t) => t.nombre.toLowerCase()).join(", "));
-  return partes.join(" · ");
+
+  const elegidos = new Set(linea.toppings.map((t) => t.topping_id));
+  const minus = (t: { nombre: string }) => t.nombre.toLowerCase();
+  const cambios: string[] = [];
+
+  for (const { nombre, opciones } of gruposDe(producto)) {
+    const elegida = opciones.find((t) => elegidos.has(t.topping_id));
+    const porDefecto = opciones.find((t) => t.incluido_por_defecto);
+    if (!elegida && porDefecto) cambios.push(`sin ${nombre.toLowerCase()}`);
+    else if (elegida && elegida.topping_id !== porDefecto?.topping_id) cambios.push(minus(elegida));
+  }
+
+  const sueltos = producto.toppings.filter((t) => !t.grupo);
+  const quitados = sueltos.filter((t) => t.incluido_por_defecto && !elegidos.has(t.topping_id));
+  const agregados = sueltos.filter((t) => !t.incluido_por_defecto && elegidos.has(t.topping_id));
+  if (quitados.length) cambios.push("sin " + quitados.map(minus).join(", "));
+  if (agregados.length) cambios.push("+ " + agregados.map(minus).join(", "));
+
+  return cambios.length ? cambios.join(" · ") : "Con todo";
 }

@@ -19,6 +19,8 @@ export interface ToppingDeProducto {
   topping_id: number;
   nombre: string;
   es_premium: boolean;
+  /** Toppings con el mismo grupo son excluyentes (ej. "Papa": ripio | hojuela). */
+  grupo: string | null;
   orden: number;
   incluido_por_defecto: boolean;
   precio_extra: number;

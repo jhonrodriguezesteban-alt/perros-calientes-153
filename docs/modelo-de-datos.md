@@ -2,7 +2,8 @@
 
 SQL completo y ejecutable:
 [`supabase/migrations/20260923000000_modelo_inicial.sql`](../supabase/migrations/20260923000000_modelo_inicial.sql).
-Datos de arranque (precios, recetas y costos **provisionales**): [`supabase/seed.sql`](../supabase/seed.sql).
+Cambios posteriores: [`20260924000000_variantes_y_plan_recuperacion.sql`](../supabase/migrations/20260924000000_variantes_y_plan_recuperacion.sql).
+Datos de arranque (precio y costos reales del 23-sep-2026; gramajes estimados): [`supabase/seed.sql`](../supabase/seed.sql).
 
 ## Roles
 
@@ -44,14 +45,14 @@ erDiagram
 |---|---|
 | `categorias` | Pestañas del POS: Perros, Bebidas… |
 | `productos` | Nombre, precio, `tipo` (`perro` / `bebida` / `acompanamiento`). No hay combos: la bebida es otra línea de la misma venta. |
-| `toppings` | Clásicos (cebolla, tomate, pepinillo, papa, salsa de huevo, mostaza, queso) y premium. |
+| `toppings` | Papa, queso, salsa de huevo, salsa rosada, mostaza, pepinillo (y premium a futuro). `grupo` agrupa **variantes excluyentes**: Papa = ripio \| hojuela, Queso = doble crema \| Saravena. El cliente elige una y cada variante tiene su propio insumo, así el costo de cada venta es el de la variante usada. |
 | `producto_toppings` | Qué toppings ofrece cada perro, si vienen **premarcados** (los clásicos sí, los premium no) y su precio extra **en ese perro**. |
 
 ### Inventario (solo socios)
 | Tabla | Para qué |
 |---|---|
-| `insumos` | Unidad (`g` / `ml` / `und`), costo promedio, stock actual y mínimo. El stock no se edita a mano: solo se mueve con movimientos. |
-| `receta_items` / `topping_insumos` | Receta base del producto y consumo de cada porción de topping. |
+| `insumos` | Unidad (`g` / `ml` / `und`), costo promedio, stock actual y mínimo, `es_estimado` (costo por confirmar) y `nota` (proveedor, presentación). El stock no se edita a mano: solo se mueve con movimientos. |
+| `receta_items` / `topping_insumos` | Receta base del producto y consumo de cada porción de topping. `es_estimado` marca los gramajes pendientes de validar con gramera. La salsa de huevo consume 0,5 huevo + 5 g de cebolla. |
 | `movimientos_inventario` | Libro de entradas y salidas: `inicial`, `compra`, `consumo_venta`, `reverso_venta`, `ajuste`, `merma`. De aquí salen el stock y el reporte de consumo vs. compras. |
 | `compras` / `compra_items` | Cada compra suma stock y recalcula el **costo promedio ponderado**: `(stock × costo actual + costo de la compra) ÷ (stock + cantidad comprada)`. |
 | `historial_costos` | Registro de cada cambio de costo, con origen (`compra` / `manual`), motivo, quién y cuándo. El ajuste manual solo se puede hacer con `ajustar_costo_insumo(...)` y motivo; un cambio directo se rechaza. |
@@ -67,7 +68,8 @@ erDiagram
 | Tabla | Para qué |
 |---|---|
 | `categorias_gasto` / `gastos` | Tipo `fijo`, `variable` o `inversion`; monto, fecha, quién registró, comprobante, y socio si es una cuota de recuperación pagada. |
-| `planes_recuperacion` | Inversión a recuperar, número de meses y mes de inicio. Cuota = monto ÷ meses, y solo aplica dentro de esos meses. |
+| `planes_recuperacion` | Número de meses y mes de inicio. `monto_total` = suma de sus conceptos. Cuota = monto ÷ meses, y solo aplica dentro de esos meses. Mientras `inicia_en` esté vacío, la cuota se proyecta en todos los meses. |
+| `plan_recuperacion_items` | Conceptos de la inversión (muebles, nevera, envío, salchichera, puesto). Agregar uno (utensilios, uniformes) sube el total solo. |
 | `aportes_socios` | Cuánto puso cada socio (para repartir las cuotas). |
 | `parametros` | Valores con vigencia: comisión Bold 1,5 %, % merma, días de operación, nómina, arriendo, y estimados para meses sin ventas. Cambiar un valor = fila nueva con fecha, sin alterar el histórico. |
 
@@ -107,12 +109,15 @@ PE pesos/mes      = PE unidades × precio
   (promedio ponderado entre perros). Si el mes todavía no tiene ventas, usa catálogo y
   parámetros estimados; el resultado indica `fuente`.
 - La cuota se evalúa según el mes consultado: al cumplirse el plazo sale sola de los costos
-  fijos y el PE baja (verificado: con los datos de ejemplo pasa de 50 a 44 perros/día en el
-  mes 13).
+  fijos y el PE baja, sin tocar nada.
 - También devuelve el margen de contribución real acumulado en el mes y el % de avance
   contra los costos fijos.
 
 ## Pendiente de datos reales
 
-Precios, recetas, costos de insumos, % de merma y el plan de recuperación (monto, meses,
-fecha de inicio) están con valores provisionales en `seed.sql`.
+- Gramajes de toppings y huevo: estimados (`es_estimado = true`), validar con gramera.
+- Costo de la cebolla cabezona: estimado de mercado.
+- Merma 3 %: provisional.
+- Bebidas: precio y costo.
+- Nómina y arriendo: valores del caso de negocio, por confirmar.
+- Plan de recuperación: fecha de inicio, y los conceptos de utensilios y uniformes.

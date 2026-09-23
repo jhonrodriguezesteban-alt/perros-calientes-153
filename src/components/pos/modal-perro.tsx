@@ -4,7 +4,7 @@ import { Check, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import { Modal } from "@/components/modal";
 import { cop } from "@/lib/formato";
-import { precioUnitario } from "@/lib/pedido";
+import { gruposDe, precioUnitario } from "@/lib/pedido";
 import type { LineaPedido, Producto, ToppingDeProducto } from "@/lib/tipos";
 
 /** "Arma tu perro": toppings clásicos premarcados, premium a mano. */
@@ -29,16 +29,39 @@ export function ModalPerro({
 
   const toppings = producto.toppings.filter((t) => elegidos.has(t.topping_id));
   const unitario = precioUnitario({ producto, toppings });
-  const clasicos = producto.toppings.filter((t) => !t.es_premium);
-  const premium = producto.toppings.filter((t) => t.es_premium);
+  const clasicos = producto.toppings.filter((t) => !t.es_premium && !t.grupo);
+  const premium = producto.toppings.filter((t) => t.es_premium && !t.grupo);
+  const grupos = gruposDe(producto);
+  const deLaCasa = producto.toppings.filter((t) => !t.es_premium);
 
-  const alternar = (id: number) =>
+  /** En un grupo (papa, queso) solo va una variante; tocar la elegida la quita. */
+  const alternar = (topping: ToppingDeProducto) =>
     setElegidos((s) => {
       const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
+      if (n.has(topping.topping_id)) {
+        n.delete(topping.topping_id);
+      } else {
+        if (topping.grupo) {
+          producto.toppings.filter((t) => t.grupo === topping.grupo).forEach((t) => n.delete(t.topping_id));
+        }
+        n.add(topping.topping_id);
+      }
       return n;
     });
+
+  const conTodo = () =>
+    setElegidos((s) => {
+      const n = new Set(s);
+      clasicos.forEach((t) => n.add(t.topping_id));
+      for (const { opciones } of grupos) {
+        if (opciones.some((t) => n.has(t.topping_id))) continue;
+        const porDefecto = opciones.find((t) => t.incluido_por_defecto) ?? opciones[0];
+        n.add(porDefecto.topping_id);
+      }
+      return n;
+    });
+
+  const sinNada = () => setElegidos((s) => new Set([...s].filter((id) => !deLaCasa.some((t) => t.topping_id === id))));
 
   return (
     <Modal
@@ -79,28 +102,41 @@ export function ModalPerro({
         </div>
       }
     >
-      {clasicos.length > 0 && (
+      {deLaCasa.length > 0 && (
         <section>
           <div className="mb-3 flex items-baseline justify-between">
             <h3 className="font-etiqueta text-base font-semibold uppercase tracking-wide text-cafe-700">Toppings de la casa</h3>
             <div className="flex gap-2">
-              <BotonTexto onClick={() => setElegidos((s) => new Set([...s, ...clasicos.map((t) => t.topping_id)]))}>
-                Con todo
-              </BotonTexto>
-              <BotonTexto
-                onClick={() =>
-                  setElegidos((s) => new Set([...s].filter((id) => !clasicos.some((t) => t.topping_id === id))))
-                }
-              >
-                Sin nada
-              </BotonTexto>
+              <BotonTexto onClick={conTodo}>Con todo</BotonTexto>
+              <BotonTexto onClick={sinNada}>Sin nada</BotonTexto>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {clasicos.map((t) => (
-              <ChipTopping key={t.topping_id} topping={t} activo={elegidos.has(t.topping_id)} onClick={() => alternar(t.topping_id)} />
-            ))}
-          </div>
+
+          {grupos.map(({ nombre, opciones }) => (
+            <div key={nombre} className="mb-3 flex items-center gap-3">
+              <span className="w-16 shrink-0 font-etiqueta text-base font-semibold">{nombre}</span>
+              <div className="grid flex-1 grid-cols-2 gap-3">
+                {opciones.map((t) => (
+                  <ChipTopping
+                    key={t.topping_id}
+                    topping={t}
+                    etiqueta={variante(t.nombre, nombre)}
+                    redondo
+                    activo={elegidos.has(t.topping_id)}
+                    onClick={() => alternar(t)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {clasicos.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {clasicos.map((t) => (
+                <ChipTopping key={t.topping_id} topping={t} activo={elegidos.has(t.topping_id)} onClick={() => alternar(t)} />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -111,7 +147,7 @@ export function ModalPerro({
           </h3>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {premium.map((t) => (
-              <ChipTopping key={t.topping_id} topping={t} activo={elegidos.has(t.topping_id)} onClick={() => alternar(t.topping_id)} />
+              <ChipTopping key={t.topping_id} topping={t} activo={elegidos.has(t.topping_id)} onClick={() => alternar(t)} />
             ))}
           </div>
         </section>
@@ -120,16 +156,30 @@ export function ModalPerro({
   );
 }
 
-function ChipTopping({ topping, activo, onClick }: { topping: ToppingDeProducto; activo: boolean; onClick: () => void }) {
+function ChipTopping({
+  topping,
+  activo,
+  onClick,
+  etiqueta,
+  redondo,
+}: {
+  topping: ToppingDeProducto;
+  activo: boolean;
+  onClick: () => void;
+  etiqueta?: string;
+  /** Opción de un grupo excluyente: indicador redondo (radio) en vez de check. */
+  redondo?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
       aria-pressed={activo}
+      aria-label={topping.nombre}
       className={`relative flex min-h-20 flex-col items-start justify-center rounded-2xl px-4 py-3 text-left transition-colors ${
         activo ? "bg-cafe text-crema shadow-md" : "bg-crema text-cafe ring-2 ring-cafe-100 active:bg-cafe-100"
       }`}
     >
-      <span className="pr-8 font-etiqueta text-lg font-semibold leading-tight">{topping.nombre}</span>
+      <span className="pr-8 font-etiqueta text-lg font-semibold leading-tight">{etiqueta ?? topping.nombre}</span>
       {topping.precio_extra > 0 && (
         <span className={`numeros text-base font-semibold ${activo ? "text-mostaza" : "text-rojo"}`}>+{cop(topping.precio_extra)}</span>
       )}
@@ -138,10 +188,16 @@ function ChipTopping({ topping, activo, onClick }: { topping: ToppingDeProducto;
           activo ? "bg-mostaza text-cafe" : "ring-2 ring-cafe-100"
         }`}
       >
-        {activo && <Check className="size-5" strokeWidth={3} />}
+        {activo && (redondo ? <span className="size-3 rounded-full bg-cafe" /> : <Check className="size-5" strokeWidth={3} />)}
       </span>
     </button>
   );
+}
+
+/** "Papa hojuela" en el grupo "Papa" → "Hojuela". */
+function variante(nombre: string, grupo: string) {
+  const sinGrupo = nombre.toLowerCase().startsWith(grupo.toLowerCase() + " ") ? nombre.slice(grupo.length + 1) : nombre;
+  return sinGrupo.charAt(0).toUpperCase() + sinGrupo.slice(1);
 }
 
 function BotonTexto({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {

@@ -1,9 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { SUPABASE_KEY, SUPABASE_URL } from "./config";
 
 export async function supabaseServidor() {
   const almacen = await cookies();
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {
       getAll: () => almacen.getAll(),
       setAll: (porGuardar) => {

@@ -27,46 +27,32 @@ Punto de venta para la tablet del contenedor y panel en tiempo real para los soc
 
 ## Puesta en marcha
 
-### 1. Supabase
-1. Crea un proyecto en [supabase.com](https://supabase.com) (región São Paulo, la más cercana a Bogotá).
-2. **Authentication → Sign In / Providers**: desactiva *Allow new users to sign up*. Los usuarios los crean los socios.
-3. Aplica el modelo de datos. Con la [CLI de Supabase](https://supabase.com/docs/guides/cli):
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref <ref-del-proyecto>
-   npx supabase db push
-   ```
-   (O copia el contenido de `supabase/migrations/20260923000000_modelo_inicial.sql` en el SQL Editor y ejecútalo.)
-4. Carga el menú de arranque: ejecuta `supabase/seed.sql` en el SQL Editor. **Precios, recetas y costos
-   son provisionales**: ajústalos antes de vender.
-5. Crea los usuarios en **Authentication → Users → Add user** (correo + contraseña, marcando *Auto Confirm*).
-   En *User metadata* puedes poner `{"nombre": "Laura"}`. Todos nacen como `empleado`; para los socios:
-   ```sql
-   update perfiles set rol = 'socio' where id in (
-     select id from auth.users where email in ('socio1@correo.com', 'socio2@correo.com')
-   );
-   ```
-6. Carga el inventario inicial en el SQL Editor (una vez):
-   ```sql
-   insert into movimientos_inventario (insumo_id, tipo, cantidad, nota)
-   select id, 'inicial', 1000, 'Inventario de arranque' from insumos where nombre = 'Queso';
-   ```
+Paso a paso para crear Supabase y publicar en Vercel (sin instalar nada):
+**[`docs/guia-puesta-en-marcha.md`](docs/guia-puesta-en-marcha.md)**.
 
-### 2. Variables de entorno
-Copia `.env.example` a `.env.local` y llena los valores de **Project Settings → API**:
+Resumen para quien ya conoce Supabase:
+1. Proyecto nuevo (región São Paulo) con el registro público desactivado.
+2. Ejecutar, en orden: `supabase/migrations/*.sql` y luego `supabase/seed.sql`
+   (o `npx supabase link` + `npx supabase db push`, y el seed en el SQL Editor).
+3. Crear usuarios en Authentication (nacen como `empleado`) y marcar a los socios con
+   `update perfiles set rol = 'socio' …`.
+4. Cargar el inventario inicial (`movimientos_inventario` tipo `inicial`).
+
+### Variables de entorno
+Copia `.env.example` a `.env.local` (y ponlas también en Vercel):
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon o publishable key>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable key>   # o NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
-### 3. Correr en local
+### Correr en local
 ```bash
 npm install
 npm run dev      # http://localhost:3000
 ```
 
-### 4. Vercel
-Importa el repositorio en Vercel, agrega las dos variables de entorno y despliega. No requiere nada más.
+### Vercel
+Importa el repositorio, agrega las dos variables de entorno y despliega. No requiere nada más.
 
 ## Scripts
 | Comando | Qué hace |
@@ -93,7 +79,7 @@ src/
   proxy.ts          sesión y redirección al login
 supabase/
   migrations/       modelo de datos, RLS y funciones (registrar_venta, anular_venta, turnos, punto_equilibrio…)
-  seed.sql          menú e insumos de arranque (provisionales)
+  seed.sql          menú, insumos y costos reales (gramajes estimados), plan de recuperación
 ```
 
 ## Seguridad
