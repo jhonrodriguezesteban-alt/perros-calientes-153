@@ -946,7 +946,7 @@ grant insert (nombre, unidad, costo_unitario, stock_minimo, activo) on insumos t
 grant update (nombre, unidad, costo_unitario, stock_minimo, activo) on insumos to authenticated;
 revoke all on all tables in schema public from anon;
 
-revoke execute on all functions in schema public from public, anon;
+revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function
   registrar_venta(jsonb), anular_venta(uuid, text), ventas_de_hoy(), alertas_stock(),
   abrir_turno(bigint), turno_actual(), cerrar_turno(bigint, text),
