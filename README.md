@@ -36,7 +36,9 @@ Resumen para quien ya conoce Supabase:
    (o `npx supabase link` + `npx supabase db push`, y el seed en el SQL Editor).
 3. Crear usuarios en Authentication (nacen como `empleado`) y marcar a los socios con
    `update perfiles set rol = 'socio' …`.
-4. Cargar el inventario inicial (`movimientos_inventario` tipo `inicial`).
+4. Ejecutar los scripts de `supabase/datos/` en orden de fecha (cambios de menú y precios; se
+   pueden repetir sin duplicar).
+5. Cargar el inventario inicial (`movimientos_inventario` tipo `inicial`).
 
 ### Variables de entorno
 Copia `.env.example` a `.env.local` (y ponlas también en Vercel):
