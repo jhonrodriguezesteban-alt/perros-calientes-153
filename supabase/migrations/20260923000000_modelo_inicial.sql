@@ -937,6 +937,12 @@ begin
   end loop;
 end $$;
 
+-- Permisos base explícitos (no depender de la opción "exponer nuevas tablas"
+-- de Supabase). Lo que cada rol ve realmente lo deciden las políticas RLS.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 -- Ventas, caja, inventario y auditoría solo cambian por RPC/trigger.
 revoke insert, update, delete on ventas, venta_items, venta_item_toppings, movimientos_inventario,
                                  historial_costos, turnos from authenticated;

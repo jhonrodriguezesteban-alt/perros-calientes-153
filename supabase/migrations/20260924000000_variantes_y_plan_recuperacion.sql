@@ -107,6 +107,7 @@ $$;
 alter table plan_recuperacion_items enable row level security;
 create policy plan_recuperacion_items_socios on plan_recuperacion_items for all to authenticated
   using (es_socio()) with check (es_socio());
+grant select, insert, update, delete on plan_recuperacion_items to authenticated;
 revoke all on plan_recuperacion_items from anon;
 
 -- Supabase da EXECUTE a authenticated en toda función nueva: se quita a las internas.
