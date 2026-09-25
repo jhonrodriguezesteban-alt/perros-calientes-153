@@ -44,7 +44,6 @@ async function obtenerEstado() {
 export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoInicial: Catalogo | null }) {
   // Catálogo: el del servidor si llegó; si no (sin internet), el último guardado.
   const [catalogo] = useState<Catalogo | null>(() => catalogoInicial ?? leerLocal<Catalogo>(CLAVE_CATALOGO));
-  const [categoriaId, setCategoriaId] = useState<number | null>(() => catalogo?.categorias[0]?.id ?? null);
   // El pedido en curso sobrevive a una recarga o a que se apague la pantalla.
   const [lineas, setLineas] = useState<LineaPedido[]>(() => leerLocal<LineaPedido[]>(CLAVE_PEDIDO) ?? []);
   const [armando, setArmando] = useState<{ producto: Producto; linea?: LineaPedido } | null>(null);
@@ -89,13 +88,19 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
     };
   }, []);
 
-  const productosPorCategoria = useMemo(
-    () => (catalogo?.productos ?? []).filter((p) => p.categoria_id === categoriaId),
-    [catalogo, categoriaId],
+  // Todo el menú en una sola vista: una sección por categoría (Perros, Bebidas…).
+  const secciones = useMemo(
+    () =>
+      (catalogo?.categorias ?? [])
+        .map((c) => ({ categoria: c, productos: (catalogo?.productos ?? []).filter((p) => p.categoria_id === c.id) }))
+        .filter((s) => s.productos.length > 0),
+    [catalogo],
   );
   const bebidas = useMemo(() => (catalogo?.productos ?? []).filter((p) => p.tipo === "bebida"), [catalogo]);
   const total = totalPedido(lineas);
   const unidades = lineas.reduce((s, l) => s + l.cantidad, 0);
+  const enPedido = (productoId: number) =>
+    lineas.filter((l) => l.producto.id === productoId).reduce((s, l) => s + l.cantidad, 0);
 
   const tocarProducto = (p: Producto) => {
     if (p.toppings.length > 0) setArmando({ producto: p });
@@ -184,41 +189,28 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
       <div className="flex min-h-0 flex-1">
         {/* Catálogo */}
         <main className="flex min-w-0 flex-1 flex-col">
-          <nav className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-2 pt-4 sm:px-6">
-            {catalogo?.categorias.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setCategoriaId(c.id)}
-                className={`h-14 shrink-0 rounded-full px-7 font-etiqueta text-lg font-extrabold uppercase tracking-wide ${
-                  c.id === categoriaId ? "bg-cafe text-crema" : "text-cafe ring-2 ring-cafe-100 active:bg-cafe-100"
-                }`}
-              >
-                {c.nombre}
-              </button>
-            ))}
-          </nav>
-
-          <div className="flex-1 overflow-y-auto px-4 pb-28 pt-3 sm:px-6 lg:pb-6">
+          <div className="flex-1 overflow-y-auto px-4 pb-28 pt-5 sm:px-6 lg:pb-6">
             {!catalogo ? (
               <p className="py-20 text-center text-lg text-cafe-300">
                 No pudimos cargar el menú. Revisa la conexión y recarga la página.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-                {productosPorCategoria.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => tocarProducto(p)}
-                    className="flex min-h-36 flex-col justify-between rounded-3xl bg-crema p-5 text-left shadow-sm ring-2 ring-cafe-100 transition-transform active:scale-[0.97] active:bg-crema-200"
-                  >
-                    <span className="font-titulo text-2xl font-extrabold leading-tight sm:text-[1.7rem]">{p.nombre}</span>
-                    <span className="mt-3 flex flex-wrap items-end justify-between gap-2">
-                      <span className="numeros font-titulo text-3xl font-extrabold text-rojo">{cop(p.precio)}</span>
-                      {p.toppings.length > 0 && (
-                        <span className="rounded-full bg-mostaza-100 px-3 py-1 font-etiqueta text-xs font-semibold uppercase">Toppings</span>
+              <div className="space-y-7">
+                {secciones.map(({ categoria, productos }) => (
+                  <section key={categoria.id}>
+                    <h2 className="mb-3 font-etiqueta text-lg font-extrabold uppercase tracking-wide text-cafe-700">
+                      {categoria.nombre}
+                    </h2>
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                      {productos.map((p) =>
+                        p.toppings.length > 0 ? (
+                          <TarjetaPerro key={p.id} producto={p} cantidad={enPedido(p.id)} onClick={() => tocarProducto(p)} />
+                        ) : (
+                          <TarjetaSimple key={p.id} producto={p} cantidad={enPedido(p.id)} onClick={() => tocarProducto(p)} />
+                        ),
                       )}
-                    </span>
-                  </button>
+                    </div>
+                  </section>
                 ))}
               </div>
             )}
@@ -268,11 +260,13 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
         <ModalPerro
           producto={armando.producto}
           lineaEditada={armando.linea}
+          bebidas={bebidas}
           alCerrar={() => setArmando(null)}
-          alConfirmar={(toppings, cantidad) => {
+          alConfirmar={(toppings, cantidad, bebida) => {
             setLineas((ls) => {
               const sinEditada = armando.linea ? ls.filter((l) => l.clave !== armando.linea!.clave) : ls;
-              return agregarLinea(sinEditada, armando.producto, toppings, cantidad);
+              const conPerro = agregarLinea(sinEditada, armando.producto, toppings, cantidad);
+              return bebida ? agregarLinea(conPerro, bebida, [], cantidad) : conPerro;
             });
             setArmando(null);
           }}
@@ -327,6 +321,57 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
 
       <Avisos avisos={avisos} />
     </div>
+  );
+}
+
+/** Perro: tarjeta grande en café; al tocarla se arma con toppings y bebida. */
+function TarjetaPerro({ producto, cantidad, onClick }: { producto: Producto; cantidad: number; onClick: () => void }) {
+  const adicionales = producto.toppings.filter((t) => t.precio_extra > 0);
+  const precioAdicional = adicionales.length ? Math.min(...adicionales.map((t) => t.precio_extra)) : 0;
+  return (
+    <button
+      onClick={onClick}
+      className="relative col-span-2 flex min-h-44 flex-col justify-between rounded-3xl bg-cafe p-6 text-left text-crema shadow-md transition-transform active:scale-[0.98]"
+    >
+      <Contador cantidad={cantidad} />
+      <span>
+        <span className="block font-titulo text-3xl font-extrabold leading-tight sm:text-4xl">{producto.nombre}</span>
+        <span className="mt-1 block font-etiqueta text-base font-semibold text-cafe-100">
+          Toca para elegir toppings y bebida
+        </span>
+      </span>
+      <span className="mt-4 flex flex-wrap items-end justify-between gap-2">
+        <span className="numeros font-titulo text-4xl font-extrabold text-mostaza">{cop(producto.precio)}</span>
+        {precioAdicional > 0 && (
+          <span className="rounded-full bg-cafe-700 px-3 py-1 font-etiqueta text-sm font-semibold">
+            Adicionales +{cop(precioAdicional)}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** Producto sin opciones (bebidas): un toque lo suma al pedido. */
+function TarjetaSimple({ producto, cantidad, onClick }: { producto: Producto; cantidad: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex min-h-36 flex-col justify-between rounded-3xl bg-crema p-5 text-left shadow-sm ring-2 ring-cafe-100 transition-transform active:scale-[0.97] active:bg-crema-200"
+    >
+      <Contador cantidad={cantidad} />
+      <span className="pr-10 font-titulo text-2xl font-extrabold leading-tight">{producto.nombre}</span>
+      <span className="numeros mt-3 font-titulo text-3xl font-extrabold text-rojo">{cop(producto.precio)}</span>
+    </button>
+  );
+}
+
+function Contador({ cantidad }: { cantidad: number }) {
+  if (cantidad === 0) return null;
+  return (
+    <span className="numeros absolute right-3 top-3 grid size-10 place-items-center rounded-full bg-rojo font-titulo text-xl font-extrabold text-white shadow">
+      {cantidad}
+    </span>
   );
 }
 
