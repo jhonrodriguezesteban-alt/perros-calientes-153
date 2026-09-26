@@ -1,7 +1,5 @@
 "use client";
 
-import { LogOut, Store } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { cop } from "@/lib/formato";
 import { supabaseNavegador } from "@/lib/supabase/client";
@@ -40,10 +38,9 @@ async function obtenerDatos() {
 }
 
 /** Primera versión del panel: cifras del día y punto de equilibrio en vivo. */
-export function PanelEnVivo({ nombre }: { nombre: string }) {
+export function PanelEnVivo() {
   const [ventas, setVentas] = useState<VentaResumen[]>([]);
   const [pe, setPe] = useState<PuntoEquilibrio | null>(null);
-  const [enVivo, setEnVivo] = useState(false);
 
   const cargar = useCallback(async () => {
     const d = await obtenerDatos();
@@ -59,7 +56,6 @@ export function PanelEnVivo({ nombre }: { nombre: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "ventas" }, () => void cargar())
       .on("postgres_changes", { event: "*", schema: "public", table: "gastos" }, () => void cargar())
       .subscribe((estado: string) => {
-        setEnVivo(estado === "SUBSCRIBED");
         // Al (re)conectar, traer el estado actual por si algo cambió mientras tanto.
         if (estado === "SUBSCRIBED") void cargar();
       });
@@ -75,29 +71,7 @@ export function PanelEnVivo({ nombre }: { nombre: string }) {
   const avance = Math.max(0, Math.min(100, pe?.avance_pct ?? 0));
 
   return (
-    <div className="min-h-dvh">
-      <header className="flex items-center gap-3 bg-cafe px-4 py-3 text-crema sm:px-8">
-        <p className="whitespace-nowrap font-titulo text-xl font-extrabold leading-none sm:text-2xl">
-          Bendito <span className="text-mostaza">Perro</span> Caliente
-        </p>
-        <span className="ml-2 hidden font-etiqueta text-sm font-semibold text-cafe-300 sm:inline">Hola, {nombre}</span>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="flex items-center gap-2 rounded-full bg-cafe-700 px-3 py-1.5 font-etiqueta text-sm font-semibold">
-            <span aria-label={enVivo ? "En vivo" : "Conectando"} className={`size-2.5 rounded-full ${enVivo ? "bg-mostaza" : "bg-cafe-300"}`} />
-            <span className="hidden sm:inline">{enVivo ? "En vivo" : "Conectando…"}</span>
-          </span>
-          <Link href="/pos" className="flex h-11 items-center gap-2 rounded-full px-4 font-etiqueta text-sm font-semibold active:bg-cafe-700">
-            <Store className="size-5" /> <span className="hidden sm:inline">POS</span>
-          </Link>
-          <form action="/salir" method="post">
-            <button aria-label="Cerrar sesión" className="grid size-11 place-items-center rounded-full active:bg-cafe-700">
-              <LogOut className="size-5" />
-            </button>
-          </form>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-8">
+    <div className="space-y-6">
         <section>
           <h1 className="font-titulo text-3xl font-extrabold">Hoy</h1>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -136,10 +110,6 @@ export function PanelEnVivo({ nombre }: { nombre: string }) {
           </section>
         )}
 
-        <p className="rounded-2xl bg-crema-200 px-5 py-4 text-cafe-700">
-          Próximamente aquí: ventas por hora, top de toppings, tasa de adjunción, gastos e inventario.
-        </p>
-      </main>
     </div>
   );
 }
