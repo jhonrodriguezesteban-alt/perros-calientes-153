@@ -23,3 +23,10 @@ export function cantidadInsumo(valor: number, unidad: "g" | "ml" | "und") {
   if (Math.abs(valor) >= 1000) return `${(valor / 1000).toLocaleString("es-CO", { maximumFractionDigits: 1 })} ${unidad === "g" ? "kg" : "L"}`;
   return `${Math.round(valor)} ${unidad}`;
 }
+
+export const NOMBRE_METODO: Record<string, string> = {
+  efectivo: "Efectivo",
+  datafono: "Datáfono",
+  nequi: "Nequi",
+  credito: "Fiado",
+};

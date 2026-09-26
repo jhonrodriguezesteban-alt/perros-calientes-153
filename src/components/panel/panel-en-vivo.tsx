@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { cop } from "@/lib/formato";
+import { cop, NOMBRE_METODO } from "@/lib/formato";
 import { supabaseNavegador } from "@/lib/supabase/client";
+import type { MetodoPago } from "@/lib/tipos";
+
+const METODOS: MetodoPago[] = ["efectivo", "datafono", "nequi", "credito"];
 
 interface VentaResumen {
   total: number;
-  metodo_pago: "efectivo" | "datafono";
+  metodo_pago: MetodoPago;
 }
 
 interface PuntoEquilibrio {
@@ -66,8 +69,9 @@ export function PanelEnVivo() {
   }, [cargar]);
 
   const total = ventas.reduce((s, v) => s + v.total, 0);
-  const efectivo = ventas.filter((v) => v.metodo_pago === "efectivo").reduce((s, v) => s + v.total, 0);
-  const datafono = total - efectivo;
+  const porMetodo = METODOS.map((m) => ({ m, valor: ventas.filter((v) => v.metodo_pago === m).reduce((s, v) => s + v.total, 0) })).filter(
+    (x) => x.valor > 0 || x.m === "efectivo" || x.m === "datafono",
+  );
   const avance = Math.max(0, Math.min(100, pe?.avance_pct ?? 0));
 
   return (
@@ -77,8 +81,9 @@ export function PanelEnVivo() {
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Tarjeta etiqueta="Ventas" valor={cop(total)} destacado />
             <Tarjeta etiqueta="Transacciones" valor={String(ventas.length)} />
-            <Tarjeta etiqueta="Efectivo" valor={cop(efectivo)} nota={total ? `${Math.round((efectivo / total) * 100)}%` : undefined} />
-            <Tarjeta etiqueta="Datáfono" valor={cop(datafono)} nota={total ? `${Math.round((datafono / total) * 100)}%` : undefined} />
+            {porMetodo.map(({ m, valor }) => (
+              <Tarjeta key={m} etiqueta={NOMBRE_METODO[m]} valor={cop(valor)} nota={total ? `${Math.round((valor / total) * 100)}%` : undefined} />
+            ))}
           </div>
         </section>
 

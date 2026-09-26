@@ -113,11 +113,12 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   const cambiarCantidad = (clave: string, delta: number) =>
     setLineas((ls) => ls.map((l) => (l.clave === clave ? { ...l, cantidad: l.cantidad + delta } : l)).filter((l) => l.cantidad > 0));
 
-  const confirmarVenta = async (metodo: MetodoPago) => {
+  const confirmarVenta = async (metodo: MetodoPago, cliente?: string) => {
     const venta = {
       id: nuevoIdVenta(),
       vendida_en: new Date().toISOString(),
       metodo_pago: metodo,
+      ...(cliente ? { cliente } : {}),
       items: lineas.map((l) => ({
         producto_id: l.producto.id,
         cantidad: l.cantidad,
@@ -281,7 +282,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
       )}
 
       {cobrando && lineas.length > 0 && (
-        <ModalCobro metodo={cobrando} total={total} alCerrar={() => setCobrando(null)} alConfirmar={() => confirmarVenta(cobrando)} />
+        <ModalCobro metodo={cobrando} total={total} alCerrar={() => setCobrando(null)} alConfirmar={(cliente) => confirmarVenta(cobrando, cliente)} />
       )}
 
       {verVentas && (
@@ -294,6 +295,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
             avisar("exito", m, "El inventario se devolvió.");
             void refrescarEstado();
           }}
+          alCobrar={(m) => avisar("exito", m, "Deuda saldada.")}
         />
       )}
 

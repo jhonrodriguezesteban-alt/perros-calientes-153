@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, CupSoda, Minus, Plus, QrCode, Trash2 } from "lucide-react";
+import { Banknote, CupSoda, HandCoins, Minus, Plus, QrCode, Smartphone, Trash2 } from "lucide-react";
 import { cop } from "@/lib/formato";
 import { describirLinea, precioUnitario, totalPedido } from "@/lib/pedido";
 import type { LineaPedido, MetodoPago, Producto } from "@/lib/tipos";
@@ -108,6 +108,12 @@ export function PanelPedido({
           <BotonPago disabled={lineas.length === 0} onClick={() => alCobrar("datafono")} Icono={QrCode}>
             Datáfono
           </BotonPago>
+          <BotonPago disabled={lineas.length === 0} onClick={() => alCobrar("nequi")} Icono={Smartphone}>
+            Nequi
+          </BotonPago>
+          <BotonPago disabled={lineas.length === 0} onClick={() => alCobrar("credito")} Icono={HandCoins} suave>
+            Fiado
+          </BotonPago>
         </div>
       </div>
     </div>
@@ -127,19 +133,25 @@ function BotonPago({
   onClick,
   disabled,
   Icono,
+  suave,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled: boolean;
   Icono: typeof Banknote;
+  suave?: boolean;
 }) {
   return (
     <button
       disabled={disabled}
       onClick={onClick}
-      className="flex h-20 flex-col items-center justify-center gap-1 rounded-2xl bg-cafe font-etiqueta text-lg font-extrabold text-crema shadow-md active:bg-cafe-700 disabled:bg-cafe-300 disabled:shadow-none"
+      className={`flex h-16 items-center justify-center gap-2 rounded-2xl font-etiqueta text-lg font-extrabold shadow-md disabled:shadow-none ${
+        suave
+          ? "bg-crema text-cafe ring-2 ring-cafe active:bg-cafe-100 disabled:text-cafe-300 disabled:ring-cafe-300"
+          : "bg-cafe text-crema active:bg-cafe-700 disabled:bg-cafe-300"
+      }`}
     >
-      <Icono className="size-7 text-mostaza" />
+      <Icono className={`size-6 ${suave ? "" : "text-mostaza"}`} />
       {children}
     </button>
   );
