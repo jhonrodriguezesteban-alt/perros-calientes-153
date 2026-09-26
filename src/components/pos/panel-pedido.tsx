@@ -106,7 +106,7 @@ export function PanelPedido({
             Efectivo
           </BotonPago>
           <BotonPago disabled={lineas.length === 0} onClick={() => alCobrar("datafono")} Icono={QrCode}>
-            Datáfono
+            Bold
           </BotonPago>
           <BotonPago disabled={lineas.length === 0} onClick={() => alCobrar("nequi")} Icono={Smartphone}>
             Nequi

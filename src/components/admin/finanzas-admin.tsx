@@ -2,7 +2,6 @@
 
 import { Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { CuentasPorCobrar } from "@/components/cuentas-por-cobrar";
 import { db, fechaCorta, hoyBogota, mesLargo, type CategoriaGasto, type Gasto, type ResumenMes } from "@/lib/admin";
 import { cop } from "@/lib/formato";
 import {
@@ -68,9 +67,9 @@ const PARAMETROS: { clave: string; nombre: string; tipo: "pesos" | "pct" | "num"
   { clave: "nomina_mensual", nombre: "Nómina mensual", tipo: "pesos", ayuda: "Salario + prestaciones + parafiscales" },
   { clave: "arriendo_mensual", nombre: "Arriendo mensual", tipo: "pesos" },
   { clave: "merma_pct", nombre: "Merma", tipo: "pct", ayuda: "% que se pierde de los insumos" },
-  { clave: "comision_datafono_pct", nombre: "Comisión datáfono", tipo: "pct" },
+  { clave: "comision_datafono_pct", nombre: "Comisión Bold", tipo: "pct" },
   { clave: "dias_operacion_mes", nombre: "Días de operación al mes", tipo: "num" },
-  { clave: "pct_ventas_datafono_estimado", nombre: "% ventas por datáfono (estimado)", tipo: "pct", ayuda: "Solo si el mes aún no tiene ventas" },
+  { clave: "pct_ventas_datafono_estimado", nombre: "% ventas por Bold (estimado)", tipo: "pct", ayuda: "Solo si el mes aún no tiene ventas" },
   { clave: "tasa_adjuncion_estimada", nombre: "% ventas con bebida (estimado)", tipo: "pct", ayuda: "Solo si el mes aún no tiene ventas" },
 ];
 
@@ -197,10 +196,6 @@ export function FinanzasAdmin() {
               <strong>Utilidad operativa</strong> = margen − gastos fijos − otros gastos. Las compras de insumos no se restan otra vez: ya
               están en el costo de lo que se vendió. La inversión (equipos, cuotas a socios) se ve aparte.
             </p>
-          </Tarjeta>
-
-          <Tarjeta>
-            <CuentasPorCobrar alCobrar={() => recargar()} />
           </Tarjeta>
 
           <Gastos mes={mes} gastos={gastosMes} categorias={data.categorias} socios={data.socios} alCambiar={recargar} />
@@ -359,7 +354,7 @@ function SimuladorPE({ pe, cargando, dias, mes }: { pe?: PE; cargando: boolean; 
         <CampoSim etiqueta="Merma %">
           <EntradaNumero valor={escenario.merma} alCambiar={(v) => set({ merma: v })} />
         </CampoSim>
-        <CampoSim etiqueta="% ventas por datáfono">
+        <CampoSim etiqueta="% ventas por Bold">
           <EntradaNumero valor={escenario.pctDatafono} alCambiar={(v) => set({ pctDatafono: v })} />
         </CampoSim>
         <CampoSim etiqueta="Margen por bebida">
@@ -377,7 +372,7 @@ function SimuladorPE({ pe, cargando, dias, mes }: { pe?: PE; cargando: boolean; 
         <CampoSim etiqueta="Cuota recuperación">
           <EntradaPesos valor={escenario.cuota} alCambiar={(v) => set({ cuota: v })} />
         </CampoSim>
-        <CampoSim etiqueta="Comisión datáfono %">
+        <CampoSim etiqueta="Comisión Bold %">
           <EntradaNumero valor={escenario.comision} alCambiar={(v) => set({ comision: v })} />
         </CampoSim>
         <CampoSim etiqueta="Días de operación">

@@ -11,12 +11,13 @@ Punto de venta para la tablet del contenedor y panel en tiempo real para los soc
 | Ruta | Quién | Qué hace |
 |---|---|---|
 | `/login` | todos | Correo y contraseña (Supabase Auth). |
-| `/pos` | empleada y socios | Venta táctil: perros con toppings (clásicos premarcados, premium a mano), bebidas, cobro en efectivo (con vuelto), datáfono Bold QR, Nequi o fiado (con nombre de quien debe), ventas del día con lo que falta por cobrar, anulación (5 min para la empleada), apertura y cierre de turno con cuadre de caja, alertas de insumos por reordenar. |
-| `/panel` | solo socios | Hoy: ventas del día, efectivo vs. datáfono y punto de equilibrio, en tiempo real. |
+| `/pos` | empleada y socios | Venta táctil: perros con toppings (clásicos premarcados, premium a mano), bebidas, cobro en efectivo (con vuelto), Bold QR, Nequi o fiado (con nombre de quien debe), ventas del día con lo que falta por cobrar, anulación (5 min para la empleada), apertura y cierre de turno con cuadre de caja, alertas de insumos por reordenar. |
+| `/panel` | solo socios | Hoy: ventas del día por medio de pago y punto de equilibrio, en tiempo real. |
 | `/panel/solicitudes` | solo socios | Pedidos de insumos que hace la empleada desde el POS; se compran o se descartan con respuesta. |
 | `/panel/inventario` | solo socios | Stock, mínimos, costos (con marca de estimado), ajuste por conteo físico o merma, insumos nuevos. |
 | `/panel/compras` | solo socios | Registrar compras: suma stock, recalcula costo promedio, crea el gasto y atiende solicitudes. |
-| `/panel/finanzas` | solo socios | Resultado mes a mes, punto de equilibrio con simulador, cuentas por cobrar (fiado), gastos, parámetros y plan de recuperación. |
+| `/panel/deudores` | solo socios | Quién debe, cuánto y desde cuándo; cobrar (todo o por venta) en efectivo, Bold o Nequi, recordatorio por WhatsApp, corregir o unir nombres e historial de pagos. |
+| `/panel/finanzas` | solo socios | Resultado mes a mes, punto de equilibrio con simulador, gastos, parámetros y plan de recuperación. |
 | `/panel/catalogo` | solo socios | Crear y editar productos y toppings, siempre con receta/porción para conocer costo y margen. |
 
 ### Si se cae el internet
