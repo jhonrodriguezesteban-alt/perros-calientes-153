@@ -12,7 +12,12 @@ Punto de venta para la tablet del contenedor y panel en tiempo real para los soc
 |---|---|---|
 | `/login` | todos | Correo y contraseña (Supabase Auth). |
 | `/pos` | empleada y socios | Venta táctil: perros con toppings (clásicos premarcados, premium a mano), bebidas, cobro en efectivo (con vuelto) o datáfono Bold QR, ventas del día, anulación (5 min para la empleada), apertura y cierre de turno con cuadre de caja, alertas de insumos por reordenar. |
-| `/panel` | solo socios | Primera versión: ventas del día, efectivo vs. datáfono y punto de equilibrio del mes, en tiempo real. |
+| `/panel` | solo socios | Hoy: ventas del día, efectivo vs. datáfono y punto de equilibrio, en tiempo real. |
+| `/panel/solicitudes` | solo socios | Pedidos de insumos que hace la empleada desde el POS; se compran o se descartan con respuesta. |
+| `/panel/inventario` | solo socios | Stock, mínimos, costos (con marca de estimado), ajuste por conteo físico o merma, insumos nuevos. |
+| `/panel/compras` | solo socios | Registrar compras: suma stock, recalcula costo promedio, crea el gasto y atiende solicitudes. |
+| `/panel/finanzas` | solo socios | Resultado mes a mes, punto de equilibrio con simulador, gastos, parámetros y plan de recuperación. |
+| `/panel/catalogo` | solo socios | Crear y editar productos y toppings, siempre con receta/porción para conocer costo y margen. |
 
 ### Si se cae el internet
 - Cada venta se guarda **primero en la tablet** y después se envía. Sin conexión queda en cola

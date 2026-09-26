@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, LayoutDashboard, LogOut, PackageOpen, ShoppingBag, Store, Wifi, WifiOff } from "lucide-react";
+import { ClipboardList, ClipboardPlus, LayoutDashboard, LogOut, PackageOpen, ShoppingBag, Store, Wifi, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avisos, useAvisos } from "@/components/aviso";
@@ -12,6 +12,7 @@ import { supabaseNavegador } from "@/lib/supabase/client";
 import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Perfil, Producto, Turno } from "@/lib/tipos";
 import { ModalCobro } from "./modal-cobro";
 import { ModalPerro } from "./modal-perro";
+import { ModalSolicitar } from "./modal-solicitar";
 import { ModalTurno } from "./modal-turno";
 import { ModalVentasHoy } from "./modal-ventas-hoy";
 import { PanelPedido } from "./panel-pedido";
@@ -51,6 +52,8 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   const [verVentas, setVerVentas] = useState(false);
   const [verTurno, setVerTurno] = useState(false);
   const [verAlertas, setVerAlertas] = useState(false);
+  // undefined = cerrado; null = abierto sin insumo elegido; número = insumo preseleccionado
+  const [pidiendo, setPidiendo] = useState<number | null | undefined>(undefined);
   const [verPedidoMovil, setVerPedidoMovil] = useState(false);
   const [turno, setTurno] = useState<Turno | null | undefined>(undefined);
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
@@ -163,6 +166,10 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
               <span className="hidden lg:inline">por reordenar</span>
             </Chip>
           )}
+          <Chip onClick={() => setPidiendo(null)} etiqueta="Pedir insumo">
+            <ClipboardPlus className="size-5" />
+            <span className="hidden lg:inline">Pedir</span>
+          </Chip>
           <Chip onClick={() => setVerTurno(true)} tono={turno === null ? "alerta" : "normal"} etiqueta="Turno">
             <Store className="size-5" />
             <span className="hidden md:inline">
@@ -306,17 +313,39 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
         <Modal abierto alCerrar={() => setVerAlertas(false)} titulo="Por reordenar">
           <ul className="space-y-2">
             {alertas.map((a) => (
-              <li key={a.insumo_id} className="flex items-baseline justify-between rounded-2xl bg-mostaza-100/60 px-5 py-3 ring-2 ring-mostaza">
-                <span className="font-etiqueta text-lg font-semibold">{a.nombre}</span>
-                <span className="numeros text-lg">
-                  quedan <strong>{cantidadInsumo(Math.max(a.stock_actual, 0), a.unidad)}</strong>
-                  <span className="text-cafe-700"> · mínimo {cantidadInsumo(a.stock_minimo, a.unidad)}</span>
+              <li key={a.insumo_id} className="flex items-center justify-between gap-3 rounded-2xl bg-mostaza-100/60 px-5 py-3 ring-2 ring-mostaza">
+                <span>
+                  <span className="block font-etiqueta text-lg font-semibold">{a.nombre}</span>
+                  <span className="numeros text-cafe-700">
+                    quedan <strong className="text-cafe">{cantidadInsumo(Math.max(a.stock_actual, 0), a.unidad)}</strong> · mínimo{" "}
+                    {cantidadInsumo(a.stock_minimo, a.unidad)}
+                  </span>
                 </span>
+                <button
+                  onClick={() => {
+                    setVerAlertas(false);
+                    setPidiendo(a.insumo_id);
+                  }}
+                  className="min-h-12 shrink-0 rounded-xl bg-cafe px-4 font-etiqueta font-semibold text-crema active:bg-cafe-700"
+                >
+                  Pedir
+                </button>
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-cafe-700">Avísale a un socio para hacer el pedido.</p>
+          <p className="mt-4 text-cafe-700">Toca “Pedir” y a los socios les llega la solicitud.</p>
         </Modal>
+      )}
+
+      {pidiendo !== undefined && (
+        <ModalSolicitar
+          insumoInicial={pidiendo ?? undefined}
+          alCerrar={() => setPidiendo(undefined)}
+          alEnviar={(m) => {
+            setPidiendo(undefined);
+            avisar("exito", m, "Te avisamos cuando lo compren.");
+          }}
+        />
       )}
 
       <Avisos avisos={avisos} />
