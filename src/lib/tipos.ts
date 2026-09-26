@@ -1,5 +1,5 @@
 export type Rol = "empleado" | "socio";
-export type MetodoPago = "efectivo" | "datafono";
+export type MetodoPago = "efectivo" | "datafono" | "nequi" | "credito";
 export type TipoProducto = "perro" | "bebida" | "acompanamiento";
 
 export interface Perfil {
@@ -55,6 +55,8 @@ export interface VentaPorEnviar {
   id: string;
   vendida_en: string;
   metodo_pago: MetodoPago;
+  /** Solo en ventas fiadas: quién queda debiendo. */
+  cliente?: string;
   notas?: string;
   items: { producto_id: number; cantidad: number; toppings: number[] }[];
   /** Solo para mostrar mientras está pendiente; el servidor recalcula el total. */
@@ -71,6 +73,8 @@ export interface VentaDeHoy {
   estado: "completada" | "anulada";
   resumen: string;
   puede_anular: boolean;
+  cliente: string | null;
+  cobrada: boolean;
 }
 
 export interface Turno {

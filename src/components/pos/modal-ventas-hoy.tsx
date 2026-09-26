@@ -2,9 +2,10 @@
 
 import { CloudOff, Loader2, RotateCw, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { CuentasPorCobrar } from "@/components/cuentas-por-cobrar";
 import { Modal } from "@/components/modal";
 import type { VentaEnCola } from "@/lib/cola-ventas";
-import { cop, horaBogota } from "@/lib/formato";
+import { cop, horaBogota, NOMBRE_METODO } from "@/lib/formato";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import type { VentaDeHoy } from "@/lib/tipos";
 
@@ -21,12 +22,14 @@ export function ModalVentasHoy({
   alReintentar,
   alDescartar,
   alAnular,
+  alCobrar,
 }: {
   cola: VentaEnCola[];
   alCerrar: () => void;
   alReintentar: () => void;
   alDescartar: (id: string) => void;
   alAnular: (mensaje: string) => void;
+  alCobrar: (mensaje: string) => void;
 }) {
   const [ventas, setVentas] = useState<VentaDeHoy[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,15 +53,32 @@ export function ModalVentasHoy({
   }, [aplicar]);
 
   const completadas = (ventas ?? []).filter((v) => v.estado === "completada");
-  const totalEfectivo = completadas.filter((v) => v.metodo_pago === "efectivo").reduce((s, v) => s + v.total, 0);
-  const totalDatafono = completadas.filter((v) => v.metodo_pago === "datafono").reduce((s, v) => s + v.total, 0);
+  const suma = (m: string) => completadas.filter((v) => v.metodo_pago === m).reduce((s, v) => s + v.total, 0);
+  const totalNequi = suma("nequi");
+  const totalFiado = suma("credito");
 
   return (
     <Modal abierto alCerrar={alCerrar} titulo="Ventas de hoy" ancho="max-w-2xl">
       <div className="mb-5 grid grid-cols-3 gap-3 text-center">
         <Cifra etiqueta="Ventas" valor={String(completadas.length)} />
-        <Cifra etiqueta="Efectivo" valor={cop(totalEfectivo)} />
-        <Cifra etiqueta="Datáfono" valor={cop(totalDatafono)} />
+        <Cifra etiqueta="Efectivo" valor={cop(suma("efectivo"))} />
+        <Cifra etiqueta="Datáfono" valor={cop(suma("datafono"))} />
+        {(totalNequi > 0 || totalFiado > 0) && (
+          <>
+            <Cifra etiqueta="Nequi" valor={cop(totalNequi)} />
+            <Cifra etiqueta="Fiado" valor={cop(totalFiado)} />
+          </>
+        )}
+      </div>
+
+      <div className="mb-5">
+        <CuentasPorCobrar
+          soloSiHay
+          alCobrar={(m) => {
+            alCobrar(m);
+            void cargar();
+          }}
+        />
       </div>
 
       {cola.length > 0 && (
@@ -76,7 +96,8 @@ export function ModalVentasHoy({
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 font-etiqueta font-semibold">
                       {rechazo ? <TriangleAlert className="size-5 text-rojo" /> : <CloudOff className="size-5" />}
-                      {horaBogota(venta.vendida_en)} · {venta.metodo_pago === "efectivo" ? "Efectivo" : "Datáfono"}
+                      {horaBogota(venta.vendida_en)} · {NOMBRE_METODO[venta.metodo_pago]}
+                      {venta.cliente && ` · ${venta.cliente}`}
                     </p>
                     <p className="truncate text-cafe-700">{venta.resumen}</p>
                     {rechazo && <p className="mt-1 text-sm font-semibold text-rojo">No se pudo registrar: {rechazo}</p>}
@@ -111,7 +132,13 @@ export function ModalVentasHoy({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-etiqueta font-semibold">
-                  #{v.numero} · {horaBogota(v.vendida_en)} · {v.metodo_pago === "efectivo" ? "Efectivo" : "Datáfono"}
+                  #{v.numero} · {horaBogota(v.vendida_en)} · {NOMBRE_METODO[v.metodo_pago]}
+                  {v.cliente && ` · ${v.cliente}`}
+                  {v.metodo_pago === "credito" && v.estado === "completada" && (
+                    <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${v.cobrada ? "bg-cafe-100" : "bg-mostaza text-cafe"}`}>
+                      {v.cobrada ? "PAGADA" : "DEBE"}
+                    </span>
+                  )}
                   {v.estado === "anulada" && <span className="ml-2 rounded-full bg-cafe px-2 py-0.5 text-xs text-crema">ANULADA</span>}
                 </p>
                 <p className="truncate text-cafe-700">{v.resumen}</p>

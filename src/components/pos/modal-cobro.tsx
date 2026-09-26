@@ -1,12 +1,26 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "@/components/modal";
 import { cop } from "@/lib/formato";
+import { supabaseNavegador } from "@/lib/supabase/client";
 import type { MetodoPago } from "@/lib/tipos";
 
 const BILLETES = [10_000, 20_000, 50_000, 100_000];
+
+const TITULOS: Record<MetodoPago, string> = {
+  efectivo: "Cobro en efectivo",
+  datafono: "Cobro con datáfono",
+  nequi: "Cobro por Nequi",
+  credito: "Fiado",
+};
+
+/** Nombres de quienes hoy deben algo, para no escribir dos veces a la misma persona distinto. */
+async function obtenerDeudores() {
+  const { data } = await supabaseNavegador().rpc("cuentas_por_cobrar");
+  return [...new Set(((data ?? []) as { cliente: string }[]).map((d) => d.cliente))];
+}
 
 export function ModalCobro({
   metodo,
@@ -17,17 +31,29 @@ export function ModalCobro({
   metodo: MetodoPago;
   total: number;
   alCerrar: () => void;
-  alConfirmar: () => Promise<void>;
+  alConfirmar: (cliente?: string) => Promise<void>;
 }) {
   const [recibido, setRecibido] = useState<number | null>(null);
+  const [cliente, setCliente] = useState("");
+  const [deudores, setDeudores] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const vuelto = recibido !== null ? recibido - total : null;
+  const fiado = metodo === "credito";
+
+  useEffect(() => {
+    if (!fiado) return;
+    let activo = true;
+    void obtenerDeudores().then((d) => activo && setDeudores(d));
+    return () => {
+      activo = false;
+    };
+  }, [fiado]);
 
   const confirmar = async () => {
-    if (guardando) return;
+    if (guardando || (fiado && !cliente.trim())) return;
     setGuardando(true);
     try {
-      await alConfirmar();
+      await alConfirmar(fiado ? cliente.trim() : undefined);
     } finally {
       setGuardando(false);
     }
@@ -37,20 +63,20 @@ export function ModalCobro({
     <Modal
       abierto
       alCerrar={guardando ? () => {} : alCerrar}
-      titulo={metodo === "efectivo" ? "Cobro en efectivo" : "Cobro con datáfono"}
+      titulo={TITULOS[metodo]}
       pie={
         <button
           onClick={confirmar}
-          disabled={guardando || (vuelto !== null && vuelto < 0)}
+          disabled={guardando || (vuelto !== null && vuelto < 0) || (fiado && !cliente.trim())}
           className="flex h-20 w-full items-center justify-center gap-3 rounded-2xl bg-rojo font-etiqueta text-2xl font-extrabold text-white shadow-md active:bg-rojo-700 disabled:bg-cafe-300"
         >
           {guardando && <Loader2 className="size-7 animate-spin" />}
-          {metodo === "efectivo" ? "Confirmar venta" : "Pago aprobado · Confirmar"}
+          {metodo === "efectivo" ? "Confirmar venta" : fiado ? "Dejar fiado" : "Pago recibido · Confirmar"}
         </button>
       }
     >
       <div className="text-center">
-        <p className="font-etiqueta text-lg font-semibold uppercase tracking-wide text-cafe-700">Total a cobrar</p>
+        <p className="font-etiqueta text-lg font-semibold uppercase tracking-wide text-cafe-700">{fiado ? "Queda debiendo" : "Total a cobrar"}</p>
         <p className="numeros font-titulo text-7xl font-extrabold text-rojo">{cop(total)}</p>
       </div>
 
@@ -76,9 +102,47 @@ export function ModalCobro({
             </div>
           )}
         </div>
+      ) : fiado ? (
+        <div className="mt-6">
+          <label htmlFor="cliente-fiado" className="mb-2 block font-etiqueta text-base font-semibold text-cafe-700">
+            ¿Quién queda debiendo?
+          </label>
+          <input
+            id="cliente-fiado"
+            value={cliente}
+            onChange={(e) => setCliente(e.target.value)}
+            placeholder="Nombre"
+            autoComplete="off"
+            className="h-16 w-full rounded-2xl bg-crema px-4 text-xl ring-2 ring-cafe-100 outline-none focus:ring-cafe"
+          />
+          {deudores.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {deudores.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setCliente(d)}
+                  className={`min-h-12 rounded-xl px-4 font-etiqueta text-sm font-semibold ${
+                    cliente.trim() === d ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 text-sm text-cafe-700">Cuando pague, se cobra desde “Ventas de hoy” → Por cobrar.</p>
+        </div>
       ) : (
         <p className="mt-6 rounded-2xl bg-crema-200 px-5 py-4 text-center text-lg">
-          Cobra <strong className="numeros">{cop(total)}</strong> en el Bold QR y confirma cuando salga <strong>aprobado</strong>.
+          {metodo === "nequi" ? (
+            <>
+              Recibe <strong className="numeros">{cop(total)}</strong> por Nequi y confirma cuando veas la <strong>notificación</strong>.
+            </>
+          ) : (
+            <>
+              Cobra <strong className="numeros">{cop(total)}</strong> en el Bold QR y confirma cuando salga <strong>aprobado</strong>.
+            </>
+          )}
         </p>
       )}
     </Modal>

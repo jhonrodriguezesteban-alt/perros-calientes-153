@@ -2,6 +2,7 @@
 
 import { Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { CuentasPorCobrar } from "@/components/cuentas-por-cobrar";
 import { db, fechaCorta, hoyBogota, mesLargo, type CategoriaGasto, type Gasto, type ResumenMes } from "@/lib/admin";
 import { cop } from "@/lib/formato";
 import {
@@ -196,6 +197,10 @@ export function FinanzasAdmin() {
               <strong>Utilidad operativa</strong> = margen − gastos fijos − otros gastos. Las compras de insumos no se restan otra vez: ya
               están en el costo de lo que se vendió. La inversión (equipos, cuotas a socios) se ve aparte.
             </p>
+          </Tarjeta>
+
+          <Tarjeta>
+            <CuentasPorCobrar alCobrar={() => recargar()} />
           </Tarjeta>
 
           <Gastos mes={mes} gastos={gastosMes} categorias={data.categorias} socios={data.socios} alCambiar={recargar} />
