@@ -1,18 +1,25 @@
 -- =====================================================================
--- Compras de apertura (21 al 24 de septiembre de 2026), tomadas de las
--- facturas que enviaron los socios. Cada compra suma al inventario,
--- recalcula el costo promedio del insumo y crea su gasto en "Insumos".
--- Ejecutar DESPUÉS de las migraciones. Se puede repetir: una compra que
--- ya está cargada (mismo proveedor y número de factura) no se duplica.
+-- Compras de apertura e inventario inicial (21 al 25 de septiembre de 2026)
 --
--- Conversión de cantidades:
---   pan brioche: paquete de 8 und · salchicha americana: paquete de 16 und
---   salsas en galón: 4.000 g · pepinillo/jalapeño: 600 g netos por frasco
+-- UN SOLO ARCHIVO para correr en el SQL Editor de Supabase, DESPUÉS de las
+-- migraciones y del script de ventas del 23 al 25. Se puede repetir sin
+-- duplicar nada (también si ya se habían corrido los scripts anteriores
+-- de compras: usa las mismas llaves).
+--
+-- 1. Compras con factura: suman al inventario y recalculan el costo.
+--    Conversión: pan en paquetes de 8, salchicha en paquetes de 16,
+--    salsas en galón de 4 kg, pepinillo/jalapeño 600 g netos por frasco.
+-- 2. Gastos sin inventario (equipos, empaques, dotación, verduras…).
+-- 3. Inventario inicial: lo que se vendió del 23 al 25 sin factura de
+--    compra (huevos, aguas, gaseosas personales, adicionales…) entra como
+--    stock inicial, para que ningún insumo quede en negativo.
+--
 -- Supuestos por confirmar:
---   * Queso bloque de San Rafael ($55.000) = doble crema a $24.000/kg
---     (precio de esa tienda el 21-sep) → 2.292 g.
---   * La compra del 21-sep (antes de abrir) fue para pruebas: se registra
---     solo como gasto, no suma al inventario.
+--   * Queso bloque ($55.000) = doble crema a $24.000/kg → 2.292 g.
+--   * Compra del 21-sep (antes de abrir): solo gasto, sin inventario.
+--   * Transferencia de gaseosas ($49.200, sin recibo) = 41 pequeñas a $1.200.
+-- Después de correrlo, lo ideal es un CONTEO FÍSICO en la app
+-- (Inventario → Ajustar por conteo) para dejar las cantidades exactas.
 -- =====================================================================
 begin;
 
@@ -146,12 +153,70 @@ select x.id::uuid, x.fecha::date, c.id, x.monto, x.descr, auth.uid()
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------
--- Verificación
+-- 24-sep 11:44 · Gaseosas por transferencia Bre-B a Yefersson Lasso Muñoz
+-- ---------------------------------------------------------------------
+do $$ begin
+  if not exists (select 1 from compras where proveedor = 'Gaseosas · Bre-B TROG0X5FloEC') then
+    perform registrar_compra(jsonb_build_object(
+      'fecha', '2026-09-24',
+      'proveedor', 'Gaseosas · Bre-B TROG0X5FloEC',
+      'registrar_gasto', true,
+      'items', jsonb_build_array(jsonb_build_object(
+        'insumo_id', (select id from insumos where nombre = 'Gaseosa pequeña'),
+        'cantidad', 41, 'costo_total', 49200))));
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Gastos sin inventario
+-- ---------------------------------------------------------------------
+insert into gastos (id, fecha, categoria_id, monto, descripcion, registrado_por)
+select x.id::uuid, x.fecha::date, c.id, x.monto, x.descr, auth.uid()
+  from (values
+    ('c2400000-0000-4000-8000-000000000001', '2026-09-24', 'Insumos', 13780,
+     'Agua Cristal garrafa 5 L × 2 (uso en cocina) · Comunal Margaritas'),
+    ('c2400000-0000-4000-8000-000000000002', '2026-09-24', 'Equipos', 124000,
+     'Distribuciones Mateo: caneca vaivén 70 L $40.000, tanque plástico $28.000, dispensador de servilletas $20.000, pinza de hielo acero $8.000, CA-07 $28.000'),
+    ('c2500000-0000-4000-8000-000000000001', '2026-09-25', 'Empaques', 10500,
+     'Todo Plásticos L&M: bolsas para llevar 2 lb $2.900 y 3 lb $3.400, cartones de perro $4.200'),
+    ('c2500000-0000-4000-8000-000000000002', '2026-09-25', 'Insumos', 20000,
+     'Verduras: tomate, cebolla, cilantro y limones (Andrea)')
+  ) as x(id, fecha, categoria, monto, descr)
+  join categorias_gasto c on c.nombre = x.categoria
+on conflict (id) do nothing;
+
+-- Los $50.000 del 23-sep que se le dieron a Andrea fueron huevos normales y de codorniz
+update gastos set descripcion = 'Huevos normales y de codorniz (dinero entregado a Andrea)'
+ where id = 'a2300000-0000-4000-8000-000000000002';
+
+-- ---------------------------------------------------------------------
+-- Inventario inicial: lo que se usó del 23 al 25 sin factura de compra.
+-- Queda fechado el 23-sep a las 6 a. m. (antes de la primera venta) y a
+-- costo actual. Solo se completa lo que falta para no quedar en negativo.
+-- ---------------------------------------------------------------------
+insert into movimientos_inventario (insumo_id, tipo, cantidad, costo_unitario, nota, creado_en)
+select i.id, 'inicial', -i.stock_actual, i.costo_unitario,
+       'Inventario inicial de apertura (usado del 23 al 25-sep sin factura de compra)',
+       '2026-09-23T06:00:00-05:00'
+  from insumos i
+ where i.stock_actual < 0
+   and not exists (select 1 from movimientos_inventario m
+                    where m.insumo_id = i.id and m.tipo = 'inicial'
+                      and m.nota like 'Inventario inicial de apertura%');
+
+-- ---------------------------------------------------------------------
+-- Resultado
 -- ---------------------------------------------------------------------
 select c.fecha, c.proveedor, sum(ci.costo_total) as total
   from compras c join compra_items ci on ci.compra_id = c.id
- where c.fecha between '2026-09-21' and '2026-09-24'
+ where c.fecha between '2026-09-21' and '2026-09-25'
  group by c.id, c.fecha, c.proveedor
  order by c.fecha, c.proveedor;
+
+select nombre as insumo, unidad, round(stock_actual) as stock, round(costo_unitario, 2) as costo_unidad,
+       round(greatest(stock_actual, 0) * costo_unitario) as valor_en_inventario
+  from insumos
+ where activo and (stock_actual <> 0 or exists (select 1 from movimientos_inventario m where m.insumo_id = insumos.id))
+ order by nombre;
 
 commit;
