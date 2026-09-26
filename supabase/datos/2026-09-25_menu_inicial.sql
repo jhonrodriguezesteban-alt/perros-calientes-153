@@ -3,7 +3,7 @@
 --   * Un solo perro ($10.000) con los toppings de la casa incluidos
 --   * Adicionales a $2.000 c/u: huevo de codorniz, frijoles, queso cheddar,
 --     tocineta frita, suero costeño
---   * Bebidas: gaseosa pequeña $2.500, gaseosa personal $3.500, agua $2.500
+--   * Bebidas: gaseosa pequeña $2.500, gaseosa personal $4.000, agua $2.500
 --
 -- Ejecutar en el SQL Editor después de seed.sql. Se puede repetir sin
 -- duplicar nada. Si alguna vez se ejecutó el script anterior de perros
@@ -47,8 +47,8 @@ values ('Gaseosa personal', 'und', 1450, 12, true, 'Estimado $1.400–1.500: con
 on conflict (nombre) do nothing;
 
 insert into productos (categoria_id, nombre, tipo, precio, orden)
-values ((select id from categorias where nombre = 'Bebidas'), 'Gaseosa personal', 'bebida', 3500, 2)
-on conflict (nombre) do update set precio = 3500, orden = 2, activo = true;
+values ((select id from categorias where nombre = 'Bebidas'), 'Gaseosa personal', 'bebida', 4000, 2)
+on conflict (nombre) do update set precio = 4000, orden = 2, activo = true;
 
 insert into receta_items (producto_id, insumo_id, cantidad, es_estimado)
 select p.id, i.id, 1, false
