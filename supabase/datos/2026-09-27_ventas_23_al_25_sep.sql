@@ -74,9 +74,26 @@ $$;
 select pg_temp.venta('23000000-0000-4000-8000-000000000001', '2026-09-23T19:00:00-05:00', 'nequi',
   jsonb_build_array(pg_temp.perro(1)));
 
-select pg_temp.venta('23000000-0000-4000-8000-000000000002', '2026-09-23T19:05:00-05:00', 'credito',
-  jsonb_build_array(pg_temp.perro(10)),
-  'Deudores 23-sep (sin detalle)', 'Saldo pendiente reportado el 23-sep');
+-- Fiado del 23 ($100.000): Sebastián Estupiñán $90.000 (lo pagó el 25) y
+-- $10.000 de alguien sin identificar.
+-- Si ya se había cargado la versión anterior de este script (un solo fiado
+-- de $100.000 "Deudores 23-sep"), se anula y se reemplaza por los dos.
+do $$ begin
+  if exists (select 1 from ventas where id = '23000000-0000-4000-8000-000000000002' and estado = 'completada') then
+    perform anular_venta('23000000-0000-4000-8000-000000000002', 'Se separa por deudor (Sebastián y sin identificar)');
+  end if;
+end $$;
+
+select pg_temp.venta('23000000-0000-4000-8000-000000000006', '2026-09-23T19:05:00-05:00', 'credito',
+  jsonb_build_array(pg_temp.perro(9)), 'Sebastián Estupiñán');
+
+select pg_temp.venta('23000000-0000-4000-8000-000000000007', '2026-09-23T19:06:00-05:00', 'credito',
+  jsonb_build_array(pg_temp.perro(1)), 'Sin identificar (23-sep)', 'Resto del fiado reportado el 23-sep');
+
+-- Sebastián pagó los $90.000 el viernes 25 (efectivo).
+update ventas
+   set cobrada_en = '2026-09-25T19:30:00-05:00', cobrada_metodo = 'efectivo', cobrada_por = auth.uid()
+ where id = '23000000-0000-4000-8000-000000000006' and cobrada_en is null;
 
 select pg_temp.venta('23000000-0000-4000-8000-000000000003', '2026-09-23T19:10:00-05:00', 'datafono',
   jsonb_build_array(pg_temp.perro(18), pg_temp.item('Gaseosa pequeña', 1)),
@@ -99,14 +116,18 @@ select pg_temp.venta('24000000-0000-4000-8000-000000000002', '2026-09-24T19:05:0
 -- ---------------------------------------------------------------------
 -- 25 de septiembre — 35 perros, 38 adicionales (reparto estimado),
 -- 10 gaseosas mini, 5 personales, 3 aguas, 1 agua saborizada.
--- Efectivo $140.000 · Bold $238.000 · Sebas debe $90.000 ·
--- Eduar (logística) $14.000 · Total $482.000
+-- Efectivo $140.000 · Bold $238.000 · Sebastián Estupiñán vuelve a deber
+-- $90.000 · Eduard (vecino) debe $14.000 · Total $482.000
 -- ---------------------------------------------------------------------
 select pg_temp.venta('25000000-0000-4000-8000-000000000001', '2026-09-25T19:00:00-05:00', 'credito',
-  jsonb_build_array(pg_temp.perro(9)), 'Sebas');
+  jsonb_build_array(pg_temp.perro(9)), 'Sebastián Estupiñán');
 
 select pg_temp.venta('25000000-0000-4000-8000-000000000002', '2026-09-25T19:05:00-05:00', 'credito',
-  jsonb_build_array(pg_temp.perro(1, array['Tocineta frita', 'Queso cheddar'])), 'Eduar (logística)');
+  jsonb_build_array(pg_temp.perro(1, array['Tocineta frita', 'Queso cheddar'])), 'Eduard (vecino)');
+
+-- Nombres corregidos si ya se había cargado la versión anterior
+update ventas set cliente = 'Sebastián Estupiñán' where id = '25000000-0000-4000-8000-000000000001' and cliente <> 'Sebastián Estupiñán';
+update ventas set cliente = 'Eduard (vecino)'     where id = '25000000-0000-4000-8000-000000000002' and cliente <> 'Eduard (vecino)';
 
 select pg_temp.venta('25000000-0000-4000-8000-000000000003', '2026-09-25T19:10:00-05:00', 'datafono',
   jsonb_build_array(

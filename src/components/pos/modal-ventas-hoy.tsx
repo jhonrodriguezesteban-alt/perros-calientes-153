@@ -62,7 +62,7 @@ export function ModalVentasHoy({
       <div className="mb-5 grid grid-cols-3 gap-3 text-center">
         <Cifra etiqueta="Ventas" valor={String(completadas.length)} />
         <Cifra etiqueta="Efectivo" valor={cop(suma("efectivo"))} />
-        <Cifra etiqueta="Datáfono" valor={cop(suma("datafono"))} />
+        <Cifra etiqueta="Bold" valor={cop(suma("datafono"))} />
         {(totalNequi > 0 || totalFiado > 0) && (
           <>
             <Cifra etiqueta="Nequi" valor={cop(totalNequi)} />

@@ -26,7 +26,7 @@ export function cantidadInsumo(valor: number, unidad: "g" | "ml" | "und") {
 
 export const NOMBRE_METODO: Record<string, string> = {
   efectivo: "Efectivo",
-  datafono: "Datáfono",
+  datafono: "Bold",
   nequi: "Nequi",
   credito: "Fiado",
 };

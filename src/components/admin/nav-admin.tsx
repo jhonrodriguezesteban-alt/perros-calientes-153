@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, ClipboardList, LayoutDashboard, LogOut, PiggyBank, ShoppingCart, Store, Utensils } from "lucide-react";
+import { Boxes, ClipboardList, HandCoins, LayoutDashboard, LogOut, PiggyBank, ShoppingCart, Store, Utensils } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,6 +11,7 @@ const ENLACES = [
   { href: "/panel/solicitudes", nombre: "Solicitudes", Icono: ClipboardList },
   { href: "/panel/inventario", nombre: "Inventario", Icono: Boxes },
   { href: "/panel/compras", nombre: "Compras", Icono: ShoppingCart },
+  { href: "/panel/deudores", nombre: "Deudores", Icono: HandCoins },
   { href: "/panel/finanzas", nombre: "Finanzas", Icono: PiggyBank },
   { href: "/panel/catalogo", nombre: "Menú", Icono: Utensils },
 ];

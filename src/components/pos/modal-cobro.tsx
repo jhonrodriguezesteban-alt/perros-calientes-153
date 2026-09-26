@@ -11,7 +11,7 @@ const BILLETES = [10_000, 20_000, 50_000, 100_000];
 
 const TITULOS: Record<MetodoPago, string> = {
   efectivo: "Cobro en efectivo",
-  datafono: "Cobro con datáfono",
+  datafono: "Cobro con Bold",
   nequi: "Cobro por Nequi",
   credito: "Fiado",
 };
