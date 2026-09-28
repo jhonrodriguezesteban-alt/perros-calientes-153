@@ -1,5 +1,13 @@
 export type Rol = "empleado" | "socio";
-export type MetodoPago = "efectivo" | "datafono" | "nequi" | "credito";
+export type MetodoPago = "efectivo" | "datafono" | "nequi" | "credito" | "mixto";
+
+/** Métodos con los que se recibe plata (un pago mixto combina varios). */
+export type MetodoCobro = "efectivo" | "datafono" | "nequi";
+
+export interface Pago {
+  metodo: MetodoCobro;
+  monto: number;
+}
 export type TipoProducto = "perro" | "bebida" | "acompanamiento";
 
 export interface Perfil {
@@ -57,6 +65,8 @@ export interface VentaPorEnviar {
   metodo_pago: MetodoPago;
   /** Solo en ventas fiadas: quién queda debiendo. */
   cliente?: string;
+  /** Solo en pagos mixtos: cuánto por cada método. */
+  pagos?: Pago[];
   notas?: string;
   items: { producto_id: number; cantidad: number; toppings: number[] }[];
   /** Solo para mostrar mientras está pendiente; el servidor recalcula el total. */
@@ -75,6 +85,7 @@ export interface VentaDeHoy {
   puede_anular: boolean;
   cliente: string | null;
   cobrada: boolean;
+  pagos: Pago[] | null;
 }
 
 export interface Turno {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, CupSoda, HandCoins, Minus, Plus, QrCode, Smartphone, Trash2 } from "lucide-react";
+import { Banknote, CupSoda, HandCoins, Minus, Plus, QrCode, Smartphone, Split, Trash2 } from "lucide-react";
 import { cop } from "@/lib/formato";
 import { describirLinea, precioUnitario, totalPedido } from "@/lib/pedido";
 import type { LineaPedido, MetodoPago, Producto } from "@/lib/tipos";
@@ -114,6 +114,13 @@ export function PanelPedido({
           <BotonPago disabled={lineas.length === 0} onClick={() => alCobrar("credito")} Icono={HandCoins} suave>
             Fiado
           </BotonPago>
+          <button
+            disabled={lineas.length === 0}
+            onClick={() => alCobrar("mixto")}
+            className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-2xl font-etiqueta text-base font-extrabold text-cafe ring-2 ring-cafe-100 active:bg-cafe-100 disabled:text-cafe-300"
+          >
+            <Split className="size-5" /> Pagar con 2 o más métodos
+          </button>
         </div>
       </div>
     </div>

@@ -12,6 +12,14 @@ interface VentaResumen {
   metodo_pago: MetodoPago;
   vendida_en: string;
   venta_items: { cantidad: number; tipo_producto: string }[];
+  venta_pagos: { metodo: string; monto: number }[];
+}
+
+/** Lo recibido por método: una venta mixta aporta a varios; lo fiado va a "credito". */
+function montosPorMetodo(v: VentaResumen): [string, number][] {
+  if (v.metodo_pago === "credito") return [["credito", v.total]];
+  if (v.venta_pagos?.length) return v.venta_pagos.map((p) => [p.metodo, p.monto]);
+  return [[v.metodo_pago, v.total]];
 }
 
 interface Dia {
@@ -46,7 +54,7 @@ function porDia(ventas: VentaResumen[]): Dia[] {
     const dia = diaBogota.format(new Date(v.vendida_en));
     const d = mapa.get(dia) ?? { dia, total: 0, perros: 0, bebidas: 0, porMetodo: {} };
     d.total += v.total;
-    d.porMetodo[v.metodo_pago] = (d.porMetodo[v.metodo_pago] ?? 0) + v.total;
+    for (const [m, monto] of montosPorMetodo(v)) d.porMetodo[m] = (d.porMetodo[m] ?? 0) + monto;
     for (const i of v.venta_items) {
       if (i.tipo_producto === "perro") d.perros += i.cantidad;
       else if (i.tipo_producto === "bebida") d.bebidas += i.cantidad;
@@ -61,7 +69,7 @@ async function obtenerDatos() {
   const [v, p] = await Promise.all([
     supabase
       .from("ventas")
-      .select("total, metodo_pago, vendida_en, venta_items(cantidad, tipo_producto)")
+      .select("total, metodo_pago, vendida_en, venta_items(cantidad, tipo_producto), venta_pagos(metodo, monto)")
       .eq("estado", "completada")
       .gte("vendida_en", inicioDelMesBogota()),
     supabase.rpc("punto_equilibrio"),
@@ -109,7 +117,7 @@ export function PanelEnVivo() {
     bebidas: dias.reduce((s, d) => s + d.bebidas, 0),
   };
   const total = ventas.reduce((s, v) => s + v.total, 0);
-  const porMetodo = METODOS.map((m) => ({ m, valor: ventas.filter((v) => v.metodo_pago === m).reduce((s, v) => s + v.total, 0) })).filter(
+  const porMetodo = METODOS.map((m) => ({ m, valor: ventas.reduce((s, v) => s + montosPorMetodo(v).filter(([x]) => x === m).reduce((a, [, n]) => a + n, 0), 0) })).filter(
     (x) => x.valor > 0 || x.m === "efectivo" || x.m === "datafono",
   );
   const avance = Math.max(0, Math.min(100, pe?.avance_pct ?? 0));

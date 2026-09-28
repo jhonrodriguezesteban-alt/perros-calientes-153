@@ -11,7 +11,7 @@ Punto de venta para la tablet del contenedor y panel en tiempo real para los soc
 | Ruta | Quién | Qué hace |
 |---|---|---|
 | `/login` | todos | Correo y contraseña (Supabase Auth). |
-| `/pos` | empleada y socios | Venta táctil: perros con toppings (clásicos premarcados, premium a mano), bebidas, cobro en efectivo (con vuelto), Bold QR, Nequi o fiado (con nombre de quien debe), ventas del día con lo que falta por cobrar, anulación (5 min para la empleada), caja: abrir día con base, retiros de efectivo a nombre de un tercero y **Finalizar día** (cuenta efectivo, declara Bold y Nequi, ve el cuadre y lo manda por WhatsApp), alertas de insumos por reordenar. |
+| `/pos` | empleada y socios | Venta táctil: perros con toppings (clásicos premarcados, premium a mano), bebidas, cobro en efectivo (con vuelto), Bold QR, Nequi, fiado (con nombre de quien debe) o **varios métodos a la vez** (ej. parte en efectivo y parte por Bold), ventas del día con lo que falta por cobrar, anulación (5 min para la empleada), caja: abrir día con base, retiros de efectivo a nombre de un tercero y **Finalizar día** (cuenta efectivo, declara Bold y Nequi, ve el cuadre y lo manda por WhatsApp), alertas de insumos por reordenar. |
 | `/panel` | solo socios | Hoy: ventas del día por medio de pago y punto de equilibrio, en tiempo real. |
 | `/panel/solicitudes` | solo socios | Pedidos de insumos que hace la empleada desde el POS; se compran o se descartan con respuesta. |
 | `/panel/inventario` | solo socios | Stock, mínimos, costos (con marca de estimado), ajuste por conteo físico o merma, insumos nuevos. |
