@@ -64,18 +64,22 @@ function porDia(ventas: VentaResumen[]): Dia[] {
   return [...mapa.values()].sort((a, b) => b.dia.localeCompare(a.dia));
 }
 
+function consultarVentas(conPagos: boolean) {
+  return supabaseNavegador()
+    .from("ventas")
+    .select(`total, metodo_pago, vendida_en, venta_items(cantidad, tipo_producto)${conPagos ? ", venta_pagos(metodo, monto)" : ""}`)
+    .eq("estado", "completada")
+    .gte("vendida_en", inicioDelMesBogota());
+}
+
 async function obtenerDatos() {
-  const supabase = supabaseNavegador();
-  const [v, p] = await Promise.all([
-    supabase
-      .from("ventas")
-      .select("total, metodo_pago, vendida_en, venta_items(cantidad, tipo_producto), venta_pagos(metodo, monto)")
-      .eq("estado", "completada")
-      .gte("vendida_en", inicioDelMesBogota()),
-    supabase.rpc("punto_equilibrio"),
-  ]);
+  const [primera, p] = await Promise.all([consultarVentas(true), supabaseNavegador().rpc("punto_equilibrio")]);
+  // Si la base todavía no tiene el detalle de pagos (migración de pagos
+  // mixtos sin correr), se muestran las ventas igual, por su método.
+  const v = primera.error ? await consultarVentas(false) : primera;
   return {
-    ventas: v.error ? null : (v.data as VentaResumen[]),
+    ventas: v.error ? null : ((v.data ?? []) as unknown as VentaResumen[]),
+    error: v.error ? v.error.message : null,
     pe: p.error ? null : (p.data as PuntoEquilibrio),
   };
 }
@@ -84,9 +88,11 @@ async function obtenerDatos() {
 export function PanelEnVivo() {
   const [ventasMes, setVentas] = useState<VentaResumen[]>([]);
   const [pe, setPe] = useState<PuntoEquilibrio | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const d = await obtenerDatos();
+    setError(d.error);
     if (d.ventas) setVentas(d.ventas);
     if (d.pe) setPe(d.pe);
   }, []);
@@ -126,6 +132,9 @@ export function PanelEnVivo() {
     <div className="space-y-6">
         <section>
           <h1 className="font-titulo text-3xl font-extrabold">Hoy</h1>
+          {error && (
+            <p className="mt-3 rounded-2xl bg-rojo/10 px-4 py-3 font-semibold text-rojo">No se pudieron cargar las ventas: {error}</p>
+          )}
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Tarjeta etiqueta="Ventas" valor={cop(total)} destacado />
             <Tarjeta etiqueta="Transacciones" valor={String(ventas.length)} />
