@@ -290,7 +290,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
         <ModalVentasHoy
           cola={cola}
           alCerrar={() => setVerVentas(false)}
-          alReintentar={() => void sincronizar()}
+          alReintentar={() => void sincronizar(true)}
           alDescartar={descartar}
           alAnular={(m) => {
             avisar("exito", m, "El inventario se devolvió.");

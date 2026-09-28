@@ -34,14 +34,18 @@ export function useColaVentas(alSincronizar?: () => void) {
     alSincronizarRef.current = alSincronizar;
   }, [alSincronizar]);
 
-  /** Reintenta todo lo pendiente (menos lo rechazado por el servidor). */
-  const sincronizar = useCallback(async () => {
+  /**
+   * Reintenta lo pendiente. Lo rechazado por el servidor solo se reintenta
+   * a mano ("Reintentar ya") o al abrir el POS: puede que ya se haya
+   * corregido la causa (por ejemplo, una actualización de la base de datos).
+   */
+  const sincronizar = useCallback(async (incluirRechazadas = false) => {
     if (enviando.current) return;
     enviando.current = true;
     let alguna = false;
     try {
       for (const item of leerCola()) {
-        if (item.rechazo) continue;
+        if (item.rechazo && !incluirRechazadas) continue;
         const r = await procesarDeCola(supabaseNavegador(), item);
         if (r.tipo === "ok") alguna = true;
         if (r.tipo === "red" || r.tipo === "sesion") break;
@@ -71,7 +75,7 @@ export function useColaVentas(alSincronizar?: () => void) {
   useEffect(() => {
     const alConectar = () => void sincronizar();
     window.addEventListener("online", alConectar);
-    const inicial = setTimeout(alConectar, 0);
+    const inicial = setTimeout(() => void sincronizar(true), 0);
     return () => {
       clearTimeout(inicial);
       window.removeEventListener("online", alConectar);
