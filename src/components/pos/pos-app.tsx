@@ -338,6 +338,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
           turno={turno}
           pendientes={pendientes}
           vistaInicial={vistaCaja}
+          esSocio={perfil.rol === "socio"}
           alCerrar={() => setVerTurno(false)}
           alCambiar={(m, d) => {
             avisar("exito", m, d);

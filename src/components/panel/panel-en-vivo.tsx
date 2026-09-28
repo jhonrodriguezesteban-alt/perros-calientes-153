@@ -11,6 +11,7 @@ interface VentaResumen {
   total: number;
   metodo_pago: MetodoPago;
   vendida_en: string;
+  comision_datafono: number;
   venta_items: { cantidad: number; tipo_producto: string }[];
   venta_pagos: { metodo: string; monto: number }[];
 }
@@ -38,6 +39,7 @@ interface PuntoEquilibrio {
   margen_contribucion_mes: number;
   avance_pct: number | null;
   margen_combinado_por_perro: number;
+  merma_pct: number;
   perros_vendidos_mes: number;
 }
 
@@ -67,7 +69,7 @@ function porDia(ventas: VentaResumen[]): Dia[] {
 function consultarVentas(conPagos: boolean) {
   return supabaseNavegador()
     .from("ventas")
-    .select(`total, metodo_pago, vendida_en, venta_items(cantidad, tipo_producto)${conPagos ? ", venta_pagos(metodo, monto)" : ""}`)
+    .select(`total, metodo_pago, vendida_en, comision_datafono, venta_items(cantidad, tipo_producto)${conPagos ? ", venta_pagos(metodo, monto)" : ""}`)
     .eq("estado", "completada")
     .gte("vendida_en", inicioDelMesBogota());
 }
@@ -123,6 +125,8 @@ export function PanelEnVivo() {
     bebidas: dias.reduce((s, d) => s + d.bebidas, 0),
   };
   const total = ventas.reduce((s, v) => s + v.total, 0);
+  const comisionMes = ventasMes.reduce((s, v) => s + (v.comision_datafono ?? 0), 0);
+  const faltaMargen = pe ? pe.costos_fijos - pe.margen_contribucion_mes : 0;
   const porMetodo = METODOS.map((m) => ({ m, valor: ventas.reduce((s, v) => s + montosPorMetodo(v).filter(([x]) => x === m).reduce((a, [, n]) => a + n, 0), 0) })).filter(
     (x) => x.valor > 0 || x.m === "efectivo" || x.m === "datafono",
   );
@@ -202,6 +206,17 @@ export function PanelEnVivo() {
                 {pe.pe_unidades_mes ?? "—"} al mes · margen combinado {cop(pe.margen_combinado_por_perro)} por perro
               </p>
             </div>
+            {pe.fuente === "ventas_reales" && (
+              <dl className="mt-5 max-w-xl space-y-1 rounded-2xl bg-cafe-700/60 p-4 text-sm sm:text-base">
+                <FilaMargen
+                  etiqueta={`Ventas del mes (${mes.perros} perros · ${mes.bebidas} bebidas)`}
+                  valor={mes.total}
+                />
+                <FilaMargen etiqueta={`− Insumos usados (con ${pe.merma_pct}% de merma)`} valor={-(mes.total - comisionMes - pe.margen_contribucion_mes)} />
+                <FilaMargen etiqueta="− Comisión Bold" valor={-comisionMes} />
+                <FilaMargen etiqueta="= Margen acumulado" valor={pe.margen_contribucion_mes} fuerte />
+              </dl>
+            )}
             <div className="mt-5">
               <div className="mb-1 flex justify-between font-etiqueta text-sm font-semibold">
                 <span>Margen acumulado {cop(pe.margen_contribucion_mes)}</span>
@@ -212,6 +227,8 @@ export function PanelEnVivo() {
               </div>
               <p className="mt-2 text-sm text-cafe-100">
                 {avance.toFixed(0)}% cubierto
+                {faltaMargen > 0 && pe.margen_combinado_por_perro > 0 &&
+                  ` · faltan ${cop(faltaMargen)} de margen ≈ ${Math.ceil(faltaMargen / pe.margen_combinado_por_perro)} perros más este mes`}
                 {pe.fuente !== "ventas_reales" && " · calculado con catálogo y estimados (aún no hay ventas este mes)"}
               </p>
             </div>
@@ -228,6 +245,15 @@ function Tarjeta({ etiqueta, valor, nota, destacado }: { etiqueta: string; valor
       <p className="font-etiqueta text-xs font-semibold uppercase tracking-wide text-cafe-700">{etiqueta}</p>
       <p className={`numeros font-titulo text-2xl font-extrabold sm:text-3xl ${destacado ? "text-rojo" : ""}`}>{valor}</p>
       {nota && <p className="font-etiqueta text-sm font-semibold text-cafe-300">{nota}</p>}
+    </div>
+  );
+}
+
+function FilaMargen({ etiqueta, valor, fuerte }: { etiqueta: string; valor: number; fuerte?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 ${fuerte ? "border-t border-cafe-300/40 pt-1 font-extrabold text-mostaza" : "text-cafe-100"}`}>
+      <dt>{etiqueta}</dt>
+      <dd className="numeros whitespace-nowrap">{valor < 0 ? `−${cop(-valor)}` : cop(valor)}</dd>
     </div>
   );
 }

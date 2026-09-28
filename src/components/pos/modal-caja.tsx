@@ -8,7 +8,7 @@ import { cop, horaBogota } from "@/lib/formato";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import type { ResumenDia, RetiroCaja, Turno } from "@/lib/tipos";
 
-export type Vista = "inicio" | "abrir" | "retiro" | "finalizar";
+export type Vista = "inicio" | "abrir" | "retiro" | "finalizar" | "base";
 
 const MOTIVOS = ["Entrega a socio", "Pago a proveedor", "Compra de insumos", "Pago a empleada"];
 
@@ -24,6 +24,7 @@ export function ModalCaja({
   turno,
   pendientes,
   vistaInicial = "inicio",
+  esSocio = false,
   alCerrar,
   alCambiar,
 }: {
@@ -31,6 +32,8 @@ export function ModalCaja({
   pendientes: number;
   /** Para abrir directo en "Abrir día" o "Finalizar día". */
   vistaInicial?: Vista;
+  /** Los socios reciben un aviso antes de abrir la caja en nombre de la empleada. */
+  esSocio?: boolean;
   alCerrar: () => void;
   alCambiar: (mensaje: string, detalle?: string) => void;
 }) {
@@ -61,6 +64,7 @@ export function ModalCaja({
   if (vista === "abrir") {
     return (
       <FormAbrir
+        esSocio={esSocio}
         alVolver={() => setVista("inicio")}
         alListo={(m) => {
           alCambiar(m);
@@ -77,6 +81,18 @@ export function ModalCaja({
           alCambiar(m, d);
           recargar();
           setVista("inicio");
+        }}
+      />
+    );
+  }
+  if (vista === "base" && turno) {
+    return (
+      <FormBase
+        turno={turno}
+        alVolver={() => setVista("inicio")}
+        alListo={(m) => {
+          alCambiar(m);
+          alCerrar();
         }}
       />
     );
@@ -102,6 +118,11 @@ export function ModalCaja({
         {turno
           ? `Día abierto a las ${horaBogota(turno.abierto_en)} por ${turno.abierto_por} con base de ${cop(turno.base_inicial)}.`
           : "Todavía no has abierto el día. Si arrancaste con plata en la caja, ábrelo con la base."}
+        {turno && (
+          <button onClick={() => setVista("base")} className="ml-2 font-etiqueta font-semibold text-cafe underline underline-offset-4">
+            Corregir apertura
+          </button>
+        )}
       </p>
 
       <div className="grid gap-3">
@@ -169,7 +190,65 @@ function FilaRetiro({ retiro: r, alAnular }: { retiro: RetiroCaja; alAnular: () 
   );
 }
 
-function FormAbrir({ alVolver, alListo }: { alVolver: () => void; alListo: (mensaje: string) => void }) {
+function FormBase({ turno, alVolver, alListo }: { turno: Turno; alVolver: () => void; alListo: (mensaje: string) => void }) {
+  const [base, setBase] = useState<number | null>(turno.base_inicial);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const ejecutar = async (accion: "corregir" | "deshacer") => {
+    if (accion === "deshacer" && !confirm("¿Deshacer la apertura? La caja queda cerrada para que la abran de nuevo.")) return;
+    setGuardando(true);
+    setError(null);
+    const supabase = supabaseNavegador();
+    const { error } =
+      accion === "corregir" ? await supabase.rpc("corregir_base", { p_base: base ?? 0 }) : await supabase.rpc("deshacer_apertura");
+    setGuardando(false);
+    if (error) setError(mensajeDe(error));
+    else alListo(accion === "corregir" ? `Base corregida: ${cop(base ?? 0)}` : "Apertura deshecha. La caja quedó cerrada.");
+  };
+
+  return (
+    <Modal
+      abierto
+      alCerrar={alVolver}
+      titulo="Corregir apertura"
+      pie={
+        <BotonConfirmar onClick={() => void ejecutar("corregir")} disabled={guardando || base === null} guardando={guardando}>
+          Guardar base
+        </BotonConfirmar>
+      }
+    >
+      <Volver onClick={alVolver} />
+      <p className="mb-4 text-cafe-700">
+        Abierta a las {horaBogota(turno.abierto_en)} por {turno.abierto_por} con base de {cop(turno.base_inicial)}.
+      </p>
+      <EntradaDinero etiqueta="¿Cuál es la base real con la que arrancó la caja?" valor={base} alCambiar={setBase} autoFocus />
+      <div className="mt-6 rounded-2xl p-4 ring-2 ring-cafe-100">
+        <p className="text-sm text-cafe-700">
+          ¿La abrieron por error? Si todavía no hay ventas ni retiros, se puede deshacer para que la abra quien va a atender.
+        </p>
+        <button
+          onClick={() => void ejecutar("deshacer")}
+          disabled={guardando}
+          className="mt-3 rounded-xl px-4 py-2 font-etiqueta font-semibold text-rojo ring-2 ring-rojo active:bg-rojo/10"
+        >
+          Deshacer apertura
+        </button>
+      </div>
+      {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
+    </Modal>
+  );
+}
+
+function FormAbrir({
+  esSocio,
+  alVolver,
+  alListo,
+}: {
+  esSocio: boolean;
+  alVolver: () => void;
+  alListo: (mensaje: string) => void;
+}) {
   const [base, setBase] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,6 +271,11 @@ function FormAbrir({ alVolver, alListo }: { alVolver: () => void; alListo: (mens
       }
     >
       <Volver onClick={alVolver} />
+      {esSocio && (
+        <p className="mb-4 rounded-2xl bg-mostaza-100 px-4 py-3 text-sm font-semibold ring-2 ring-mostaza">
+          Vas a abrir la caja como socio. Si Andrea va a atender hoy, mejor que la abra ella desde la tablet con la base que recibe.
+        </p>
+      )}
       <EntradaDinero etiqueta="¿Con cuánto efectivo arrancas en la caja? (base)" valor={base} alCambiar={setBase} autoFocus />
       {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
     </Modal>
