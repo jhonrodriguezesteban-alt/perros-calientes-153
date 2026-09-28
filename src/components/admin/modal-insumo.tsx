@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/modal";
-import { db, nombreUnidad, type Insumo, type Unidad } from "@/lib/admin";
+import { db, FAMILIAS, nombreUnidad, type Familia, type Insumo, type Unidad } from "@/lib/admin";
 import { cop } from "@/lib/formato";
 import { aNumero, Boton, Campo, Entrada, EntradaNumero, EntradaPesos, exigir, mensajeError, MensajeError, Selector } from "./ui";
 
@@ -10,11 +10,13 @@ import { aNumero, Boton, Campo, Entrada, EntradaNumero, EntradaPesos, exigir, me
 export function ModalInsumo({
   insumo,
   nombreInicial = "",
+  familiaInicial,
   alCerrar,
   alGuardar,
 }: {
   insumo?: Insumo;
   nombreInicial?: string;
+  familiaInicial?: Familia;
   alCerrar: () => void;
   alGuardar: (insumo: Insumo) => void;
 }) {
@@ -25,6 +27,7 @@ export function ModalInsumo({
   const [nota, setNota] = useState(insumo?.nota ?? "");
   const [estimado, setEstimado] = useState(insumo?.es_estimado ?? false);
   const [activo, setActivo] = useState(insumo?.activo ?? true);
+  const [familia, setFamilia] = useState<Familia>(insumo?.familia ?? familiaInicial ?? "perro");
   const [motivo, setMotivo] = useState("");
   const [paquetePrecio, setPaquetePrecio] = useState<number | null>(null);
   const [paqueteContenido, setPaqueteContenido] = useState("");
@@ -52,6 +55,7 @@ export function ModalInsumo({
         nota: nota.trim() || null,
         es_estimado: estimado,
         activo,
+        familia,
       };
       let guardado: Insumo;
       if (insumo) {
@@ -95,6 +99,22 @@ export function ModalInsumo({
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo etiqueta="Nombre" className="sm:col-span-2">
           <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Queso cheddar" />
+        </Campo>
+        <Campo etiqueta="Familia" className="sm:col-span-2">
+          <div className="flex flex-wrap gap-2">
+            {FAMILIAS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFamilia(f.id)}
+                className={`min-h-11 rounded-xl px-4 font-etiqueta text-sm font-semibold ${
+                  familia === f.id ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
+                }`}
+              >
+                {f.nombre}
+              </button>
+            ))}
+          </div>
         </Campo>
         <Campo etiqueta="Se mide en" ayuda={insumo ? "No se puede cambiar después de creado." : undefined}>
           <Selector value={unidad} disabled={!!insumo} onChange={(e) => setUnidad(e.target.value as Unidad)}>

@@ -2,7 +2,7 @@
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { db, fechaCorta, hoyBogota, type Compra, type Insumo, type Solicitud } from "@/lib/admin";
+import { db, FAMILIAS, fechaCorta, hoyBogota, type Compra, type Insumo, type Solicitud } from "@/lib/admin";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { costoTexto } from "./inventario-admin";
 import { ModalInsumo } from "./modal-insumo";
@@ -205,11 +205,18 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                         }}
                       >
                         <option value="">Elige un insumo…</option>
-                        {data.insumos.map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {i.nombre}
-                          </option>
-                        ))}
+                        {FAMILIAS.map((f) => {
+                          const deFamilia = data.insumos.filter((i) => (i.familia ?? "perro") === f.id);
+                          return deFamilia.length === 0 ? null : (
+                            <optgroup key={f.id} label={f.nombre}>
+                              {deFamilia.map((i) => (
+                                <option key={i.id} value={i.id}>
+                                  {i.nombre}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
                         <option value="nuevo">+ Crear insumo nuevo…</option>
                       </Selector>
                     </Campo>
