@@ -40,11 +40,23 @@ export interface Solicitud {
   solicitante: { nombre: string } | null;
 }
 
+export type PagoCompra = "caja" | "efectivo" | "tarjeta" | "transferencia" | "socio";
+
+export const PAGOS_COMPRA: { id: PagoCompra; nombre: string }[] = [
+  { id: "caja", nombre: "Efectivo de la caja" },
+  { id: "efectivo", nombre: "Efectivo (otro)" },
+  { id: "tarjeta", nombre: "Tarjeta" },
+  { id: "transferencia", nombre: "Transferencia / Nequi" },
+  { id: "socio", nombre: "Lo pagó un socio" },
+];
+
 export interface Compra {
   id: string;
   fecha: string;
   proveedor: string | null;
   gasto_id: string | null;
+  pagado_con: PagoCompra | null;
+  socio: { nombre: string } | null;
   compra_items: { cantidad: number; costo_total: number; insumos: { nombre: string; unidad: Unidad } | null }[];
 }
 
