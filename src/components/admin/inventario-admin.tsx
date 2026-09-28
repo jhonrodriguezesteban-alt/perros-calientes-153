@@ -3,7 +3,7 @@
 import { Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/modal";
-import { db, fechaCorta, type Insumo } from "@/lib/admin";
+import { db, FAMILIAS, fechaCorta, type Familia, type Insumo } from "@/lib/admin";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { ModalInsumo } from "./modal-insumo";
 import {
@@ -67,6 +67,7 @@ export function InventarioAdmin() {
   const [busqueda, setBusqueda] = useState("");
   const [soloReordenar, setSoloReordenar] = useState(false);
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [familia, setFamilia] = useState<Familia | null>(null);
   const [editando, setEditando] = useState<Insumo | "nuevo" | null>(null);
   const [ajustando, setAjustando] = useState<Insumo | null>(null);
 
@@ -76,9 +77,10 @@ export function InventarioAdmin() {
         (i) =>
           (mostrarInactivos || i.activo) &&
           (!soloReordenar || i.stock_actual <= i.stock_minimo) &&
+          (!familia || (i.familia ?? "perro") === familia) &&
           i.nombre.toLowerCase().includes(busqueda.toLowerCase()),
       ),
-    [data, busqueda, soloReordenar, mostrarInactivos],
+    [data, busqueda, soloReordenar, mostrarInactivos, familia],
   );
   const activos = (data?.insumos ?? []).filter((i) => i.activo);
   const porReordenar = activos.filter((i) => i.stock_actual <= i.stock_minimo).length;
@@ -115,6 +117,16 @@ export function InventarioAdmin() {
                 <Search className="pointer-events-none absolute left-3 top-3.5 size-5 text-cafe-300" />
                 <Entrada value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar insumo" className="pl-10" />
               </div>
+              <div className="flex w-full flex-wrap gap-2">
+                <Filtro activo={familia === null} onClick={() => setFamilia(null)}>
+                  Todas
+                </Filtro>
+                {FAMILIAS.map((f) => (
+                  <Filtro key={f.id} activo={familia === f.id} onClick={() => setFamilia(familia === f.id ? null : f.id)}>
+                    {f.nombre}
+                  </Filtro>
+                ))}
+              </div>
               <Filtro activo={soloReordenar} onClick={() => setSoloReordenar((v) => !v)}>
                 Solo por reordenar
               </Filtro>
@@ -138,8 +150,23 @@ export function InventarioAdmin() {
                       <th className="px-2 py-2" />
                     </tr>
                   </thead>
-                  <tbody>
-                    {insumos.map((i) => {
+                  {FAMILIAS.map((f) => {
+                    const grupo = insumos.filter((i) => (i.familia ?? "perro") === f.id);
+                    if (grupo.length === 0) return null;
+                    const valorGrupo = grupo.filter((i) => i.activo).reduce((s, i) => s + Math.max(i.stock_actual, 0) * i.costo_unitario, 0);
+                    return (
+                  <tbody key={f.id}>
+                    <tr>
+                      <td colSpan={6} className="px-2 pb-2 pt-6">
+                        <div className="flex items-baseline justify-between gap-3 rounded-xl bg-cafe px-4 py-2 text-crema">
+                          <span className="font-etiqueta font-extrabold uppercase tracking-wide">
+                            {f.nombre} <span className="font-semibold normal-case text-cafe-300">· {grupo.length}</span>
+                          </span>
+                          <span className="numeros font-etiqueta font-bold">{cop(valorGrupo)}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {grupo.map((i) => {
                       const bajo = i.stock_actual <= i.stock_minimo;
                       return (
                         <tr key={i.id} className={`border-b border-cafe-100 ${i.activo ? "" : "opacity-50"}`}>
@@ -171,6 +198,8 @@ export function InventarioAdmin() {
                       );
                     })}
                   </tbody>
+                    );
+                  })}
                 </table>
               </div>
             )}

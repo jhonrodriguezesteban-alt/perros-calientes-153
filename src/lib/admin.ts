@@ -3,6 +3,16 @@ import type { MetodoPago, TipoProducto } from "@/lib/tipos";
 
 export type Unidad = "g" | "ml" | "und";
 
+export type Familia = "perro" | "bebidas" | "utensilios" | "otros";
+
+/** Familias de insumos, en el orden en que se muestran. */
+export const FAMILIAS: { id: Familia; nombre: string; ayuda: string }[] = [
+  { id: "perro", nombre: "Para el perro", ayuda: "Pan, salchicha, quesos, papas, salsas y toppings" },
+  { id: "bebidas", nombre: "Bebidas", ayuda: "Gaseosas y aguas" },
+  { id: "utensilios", nombre: "Utensilios y empaques", ayuda: "Bandejas, servilletas, bolsas, cajitas" },
+  { id: "otros", nombre: "Otros", ayuda: "Lo que no encaje en las anteriores" },
+];
+
 export interface Insumo {
   id: number;
   nombre: string;
@@ -13,6 +23,7 @@ export interface Insumo {
   activo: boolean;
   es_estimado: boolean;
   nota: string | null;
+  familia: Familia;
 }
 
 export interface Solicitud {
