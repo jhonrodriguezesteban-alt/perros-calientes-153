@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   PiggyBank,
+  Receipt,
   ShoppingCart,
   Store,
   Utensils,
@@ -25,6 +26,7 @@ const GRUPOS = [
     enlaces: [
       { href: "/pos", nombre: "Punto de venta", ayuda: "Vender", Icono: Store },
       { href: "/panel", nombre: "Hoy", ayuda: "Ventas del día y del mes", Icono: LayoutDashboard },
+      { href: "/panel/ventas", nombre: "Ventas", ayuda: "Por fechas, día por día", Icono: Receipt },
       { href: "/panel/caja", nombre: "Caja", ayuda: "Cierres y retiros", Icono: Landmark },
       { href: "/panel/solicitudes", nombre: "Solicitudes", ayuda: "Lo que pide Andrea", Icono: ClipboardList },
     ],

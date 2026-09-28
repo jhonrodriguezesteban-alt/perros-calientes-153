@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { db, FAMILIAS, fechaCorta, hoyBogota, type Compra, type Insumo, type Solicitud } from "@/lib/admin";
+import { db, FAMILIAS, fechaCorta, hoyBogota, PAGOS_COMPRA, type Compra, type Insumo, type PagoCompra, type Solicitud } from "@/lib/admin";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { costoTexto } from "./inventario-admin";
 import { ModalInsumo } from "./modal-insumo";
@@ -32,15 +32,18 @@ interface Linea {
   costo_total: number | null;
 }
 
+const SELECT_COMPRA =
+  "id, fecha, proveedor, gasto_id, pagado_con, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(cantidad, costo_total, insumos(nombre, unidad))";
+
 async function cargarCompras() {
-  const [insumos, compras, solicitudes] = await Promise.all([
+  const [insumos, compras, solicitudes, socios, prestadas] = await Promise.all([
     db().from("insumos").select("*").eq("activo", true).order("nombre").returns<Insumo[]>(),
     db()
       .from("compras")
-      .select("id, fecha, proveedor, gasto_id, compra_items(cantidad, costo_total, insumos(nombre, unidad))")
+      .select(SELECT_COMPRA)
       .order("fecha", { ascending: false })
       .order("creado_en", { ascending: false })
-      .limit(20)
+      .limit(30)
       .returns<Compra[]>(),
     db()
       .from("solicitudes_pedido")
@@ -48,8 +51,16 @@ async function cargarCompras() {
       .eq("estado", "pendiente")
       .order("creado_en")
       .returns<Solicitud[]>(),
+    db().from("perfiles").select("id, nombre").eq("rol", "socio").eq("activo", true).order("nombre"),
+    db().from("compras").select(SELECT_COMPRA).eq("pagado_con", "socio").returns<Compra[]>(),
   ]);
-  return { insumos: exigir(insumos), compras: exigir(compras), solicitudes: exigir(solicitudes) };
+  return {
+    insumos: exigir(insumos),
+    compras: exigir(compras),
+    solicitudes: exigir(solicitudes),
+    socios: exigir(socios) as { id: string; nombre: string }[],
+    prestadas: exigir(prestadas),
+  };
 }
 
 let siguienteClave = 1;
@@ -67,6 +78,9 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
   const [lineas, setLineas] = useState<Linea[]>([lineaVacia()]);
   const [solicitudes, setSolicitudes] = useState<Set<string>>(new Set());
   const [registrarGasto, setRegistrarGasto] = useState(true);
+  const [pagadoCon, setPagadoCon] = useState<PagoCompra | null>(null);
+  const [socioId, setSocioId] = useState("");
+  const [abierta, setAbierta] = useState<string | null>(null);
   const [creandoInsumoPara, setCreandoInsumoPara] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
@@ -119,6 +133,8 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
       if (!c || c <= 0) return setAviso({ tipo: "error", texto: `Falta la cantidad de ${insumos.get(l.insumo_id!)?.nombre}.` });
       if (l.costo_total === null) return setAviso({ tipo: "error", texto: `Falta cuánto costó ${insumos.get(l.insumo_id!)?.nombre}.` });
     }
+    if (!pagadoCon) return setAviso({ tipo: "error", texto: "Elige con qué se pagó la compra." });
+    if (pagadoCon === "socio" && !socioId) return setAviso({ tipo: "error", texto: "Elige qué socio puso la plata." });
     setGuardando(true);
     try {
       exigir(
@@ -126,6 +142,8 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
           p_compra: {
             fecha,
             proveedor,
+            pagado_con: pagadoCon,
+            socio_id: pagadoCon === "socio" ? socioId : null,
             registrar_gasto: registrarGasto,
             items: validas.map((l) => ({ insumo_id: l.insumo_id, cantidad: aNumero(l.cantidad), costo_total: l.costo_total })),
             solicitudes: [...solicitudes],
@@ -136,6 +154,8 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
       setLineas([lineaVacia()]);
       setSolicitudes(new Set());
       setProveedor("");
+      setPagadoCon(null);
+      setSocioId("");
       recargar();
     } catch (e) {
       setAviso({ tipo: "error", texto: mensajeError(e) });
@@ -253,6 +273,39 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
               </Boton>
             </div>
 
+            <div className="mt-5 border-t-2 border-cafe-100 pt-4">
+              <p className="mb-2 font-etiqueta text-sm font-semibold text-cafe-700">¿Con qué se pagó?</p>
+              <div className="flex flex-wrap gap-2">
+                {PAGOS_COMPRA.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPagadoCon(p.id)}
+                    className={`min-h-11 rounded-xl px-4 font-etiqueta text-sm font-semibold ${
+                      pagadoCon === p.id ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
+                    }`}
+                  >
+                    {p.nombre}
+                  </button>
+                ))}
+              </div>
+              {pagadoCon === "socio" && (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Selector value={socioId} onChange={(e) => setSocioId(e.target.value)} className="w-auto min-w-56">
+                    <option value="">¿Qué socio puso la plata?</option>
+                    {data.socios.map((so) => (
+                      <option key={so.id} value={so.id}>
+                        {so.nombre}
+                      </option>
+                    ))}
+                  </Selector>
+                  <span className="text-sm text-cafe-700">Queda anotado como plata que el negocio le debe a ese socio.</span>
+                </div>
+              )}
+              {pagadoCon === "caja" && fecha === hoyBogota() && (
+                <p className="mt-2 text-sm text-cafe-700">Sale de la caja de hoy como retiro, para que el cierre del día cuadre.</p>
+              )}
+            </div>
+
             <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t-2 border-cafe-100 pt-4">
               <label className="flex items-center gap-3 font-etiqueta text-sm font-semibold">
                 <input type="checkbox" className="size-5 accent-cafe" checked={registrarGasto} onChange={(e) => setRegistrarGasto(e.target.checked)} />
@@ -276,6 +329,20 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
             )}
           </Tarjeta>
 
+          {data.prestadas.length > 0 && (
+            <Tarjeta>
+              <Subtitulo>Compras pagadas por socios (préstamos al negocio)</Subtitulo>
+              <div className="flex flex-wrap gap-3">
+                {[...agruparPorSocio(data.prestadas).entries()].map(([nombre, monto]) => (
+                  <div key={nombre} className="rounded-2xl bg-crema-200 px-4 py-3">
+                    <p className="font-etiqueta text-sm font-semibold text-cafe-700">{nombre}</p>
+                    <p className="numeros font-titulo text-2xl font-extrabold">{cop(monto)}</p>
+                  </div>
+                ))}
+              </div>
+            </Tarjeta>
+          )}
+
           <Tarjeta>
             <Subtitulo>Compras recientes</Subtitulo>
             {data.compras.length === 0 ? (
@@ -286,17 +353,56 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                   const totalCompra = c.compra_items.reduce((s, i) => s + i.costo_total, 0);
                   return (
                     <li key={c.id} className="py-3">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <p className="font-etiqueta font-semibold">
-                          {fechaCorta(c.fecha)} · {c.proveedor ?? "Sin proveedor"}
-                        </p>
-                        <span className="numeros font-titulo text-xl font-extrabold">{cop(totalCompra)}</span>
-                      </div>
-                      <p className="text-sm text-cafe-700">
-                        {c.compra_items
-                          .map((i) => `${i.insumos?.nombre} ${i.insumos ? cantidadInsumo(i.cantidad, i.insumos.unidad) : i.cantidad} (${cop(i.costo_total)})`)
-                          .join(" · ")}
-                      </p>
+                      <button onClick={() => setAbierta(abierta === c.id ? null : c.id)} className="w-full text-left">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="font-etiqueta font-semibold">
+                            {fechaCorta(c.fecha)} · {c.proveedor ?? "Sin proveedor"}
+                            <span className="ml-2 font-normal text-cafe-700">· {textoPago(c)}</span>
+                          </p>
+                          <span className="flex items-center gap-2">
+                            <span className="numeros font-titulo text-xl font-extrabold">{cop(totalCompra)}</span>
+                            <ChevronDown className={`size-5 transition ${abierta === c.id ? "rotate-180" : ""}`} />
+                          </span>
+                        </div>
+                        {abierta !== c.id && (
+                          <p className="truncate text-sm text-cafe-700">
+                            {c.compra_items.length} {c.compra_items.length === 1 ? "producto" : "productos"}:{" "}
+                            {c.compra_items.map((i) => i.insumos?.nombre).join(", ")}
+                          </p>
+                        )}
+                      </button>
+                      {abierta === c.id && (
+                        <div className="-mx-2 mt-3 overflow-x-auto">
+                          <table className="w-full min-w-[520px] text-sm">
+                            <thead className="font-etiqueta text-xs uppercase tracking-wide text-cafe-700">
+                              <tr className="border-b-2 border-cafe-100">
+                                <th className="px-2 py-2 text-left">#</th>
+                                <th className="px-2 py-2 text-left">Insumo</th>
+                                <th className="px-2 py-2 text-right">Cantidad</th>
+                                <th className="px-2 py-2 text-right">Costo unitario</th>
+                                <th className="px-2 py-2 text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="numeros">
+                              {c.compra_items.map((i, n) => (
+                                <tr key={n} className="border-b border-cafe-100">
+                                  <td className="px-2 py-2 text-left text-cafe-300">{n + 1}</td>
+                                  <td className="px-2 py-2 text-left font-etiqueta font-semibold">{i.insumos?.nombre}</td>
+                                  <td className="px-2 py-2 text-right">{i.insumos ? cantidadInsumo(i.cantidad, i.insumos.unidad) : i.cantidad}</td>
+                                  <td className="px-2 py-2 text-right text-cafe-700">
+                                    {i.insumos ? costoTexto({ costo_unitario: i.costo_total / i.cantidad, unidad: i.insumos.unidad }) : "—"}
+                                  </td>
+                                  <td className="px-2 py-2 text-right font-semibold">{cop(i.costo_total)}</td>
+                                </tr>
+                              ))}
+                              <tr>
+                                <td colSpan={4} className="px-2 py-2 text-right font-etiqueta font-semibold">Total</td>
+                                <td className="px-2 py-2 text-right font-titulo text-lg font-extrabold">{cop(totalCompra)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -318,4 +424,19 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
       )}
     </div>
   );
+}
+
+function textoPago(c: Compra) {
+  if (!c.pagado_con) return "pago sin registrar";
+  if (c.pagado_con === "socio") return `lo pagó ${c.socio?.nombre ?? "un socio"}`;
+  return PAGOS_COMPRA.find((p) => p.id === c.pagado_con)?.nombre.toLowerCase() ?? c.pagado_con;
+}
+
+function agruparPorSocio(compras: Compra[]) {
+  const m = new Map<string, number>();
+  for (const c of compras) {
+    const n = c.socio?.nombre ?? "Socio";
+    m.set(n, (m.get(n) ?? 0) + c.compra_items.reduce((s, i) => s + i.costo_total, 0));
+  }
+  return m;
 }

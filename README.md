@@ -15,7 +15,8 @@ Punto de venta para la tablet del contenedor y panel en tiempo real para los soc
 | `/panel` | solo socios | Hoy: ventas del día por medio de pago y punto de equilibrio, en tiempo real. |
 | `/panel/solicitudes` | solo socios | Pedidos de insumos que hace la empleada desde el POS; se compran o se descartan con respuesta. |
 | `/panel/inventario` | solo socios | Stock, mínimos, costos (con marca de estimado), ajuste por conteo físico o merma, insumos nuevos. |
-| `/panel/compras` | solo socios | Registrar compras: suma stock, recalcula costo promedio, crea el gasto y atiende solicitudes. |
+| `/panel/compras` | solo socios | Registrar compras con forma de pago (caja, efectivo, tarjeta, transferencia o plata de un socio): suma stock, recalcula costo promedio, crea el gasto y atiende solicitudes. Historial con el detalle de cada compra. |
+| `/panel/ventas` | solo socios | Ventas por rango de fechas (hoy, ayer, 7 días, mes, mes pasado o fechas a elegir); al tocar un día: cada venta, lo vendido por producto, adicionales y medios de pago. |
 | `/panel/caja` | solo socios | Cierres de cada día (efectivo y bancos: sistema vs. declarado, con el detalle de lo vendido) y retiros de efectivo por persona. |
 | `/panel/deudores` | solo socios | Quién debe, cuánto y desde cuándo; cobrar (todo o por venta) en efectivo, Bold o Nequi, recordatorio por WhatsApp, corregir o unir nombres e historial de pagos. |
 | `/panel/finanzas` | solo socios | Resultado mes a mes, punto de equilibrio con simulador, gastos, parámetros y plan de recuperación. |
