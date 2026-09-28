@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CuentasPorCobrar } from "@/components/cuentas-por-cobrar";
 import { Modal } from "@/components/modal";
 import type { VentaEnCola } from "@/lib/cola-ventas";
-import { cop, horaBogota, NOMBRE_METODO } from "@/lib/formato";
+import { cop, detallePagos, horaBogota, NOMBRE_METODO } from "@/lib/formato";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import type { VentaDeHoy } from "@/lib/tipos";
 
@@ -53,7 +53,14 @@ export function ModalVentasHoy({
   }, [aplicar]);
 
   const completadas = (ventas ?? []).filter((v) => v.estado === "completada");
-  const suma = (m: string) => completadas.filter((v) => v.metodo_pago === m).reduce((s, v) => s + v.total, 0);
+  // Lo recibido por cada método (una venta mixta aporta a varios)
+  const suma = (m: string) =>
+    m === "credito"
+      ? completadas.filter((v) => v.metodo_pago === "credito").reduce((s, v) => s + v.total, 0)
+      : completadas.reduce(
+          (s, v) => s + (v.pagos ? v.pagos.filter((p) => p.metodo === m).reduce((x, p) => x + p.monto, 0) : v.metodo_pago === m ? v.total : 0),
+          0,
+        );
   const totalNequi = suma("nequi");
   const totalFiado = suma("credito");
 
@@ -96,7 +103,7 @@ export function ModalVentasHoy({
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 font-etiqueta font-semibold">
                       {rechazo ? <TriangleAlert className="size-5 text-rojo" /> : <CloudOff className="size-5" />}
-                      {horaBogota(venta.vendida_en)} · {NOMBRE_METODO[venta.metodo_pago]}
+                      {horaBogota(venta.vendida_en)} · {venta.pagos ? detallePagos(venta.pagos) : NOMBRE_METODO[venta.metodo_pago]}
                       {venta.cliente && ` · ${venta.cliente}`}
                     </p>
                     <p className="truncate text-cafe-700">{venta.resumen}</p>
@@ -132,7 +139,7 @@ export function ModalVentasHoy({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-etiqueta font-semibold">
-                  #{v.numero} · {horaBogota(v.vendida_en)} · {NOMBRE_METODO[v.metodo_pago]}
+                  #{v.numero} · {horaBogota(v.vendida_en)} · {v.metodo_pago === "mixto" ? detallePagos(v.pagos) : NOMBRE_METODO[v.metodo_pago]}
                   {v.cliente && ` · ${v.cliente}`}
                   {v.metodo_pago === "credito" && v.estado === "completada" && (
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${v.cobrada ? "bg-cafe-100" : "bg-mostaza text-cafe"}`}>

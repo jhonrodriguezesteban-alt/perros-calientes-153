@@ -29,4 +29,10 @@ export const NOMBRE_METODO: Record<string, string> = {
   datafono: "Bold",
   nequi: "Nequi",
   credito: "Fiado",
+  mixto: "Mixto",
 };
+
+/** "Efectivo $5.000 + Bold $7.500" */
+export function detallePagos(pagos: { metodo: string; monto: number }[] | null | undefined) {
+  return (pagos ?? []).map((p) => `${NOMBRE_METODO[p.metodo] ?? p.metodo} ${cop(p.monto)}`).join(" + ");
+}

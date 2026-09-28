@@ -9,7 +9,7 @@ import { nuevoIdVenta } from "@/lib/cola-ventas";
 import { cantidadInsumo, cop, horaBogota } from "@/lib/formato";
 import { agregarLinea, resumenPedido, totalPedido } from "@/lib/pedido";
 import { supabaseNavegador } from "@/lib/supabase/client";
-import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Perfil, Producto, Turno } from "@/lib/tipos";
+import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Pago, Perfil, Producto, Turno } from "@/lib/tipos";
 import { ModalCobro } from "./modal-cobro";
 import { ModalPerro } from "./modal-perro";
 import { ModalSolicitar } from "./modal-solicitar";
@@ -113,12 +113,13 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   const cambiarCantidad = (clave: string, delta: number) =>
     setLineas((ls) => ls.map((l) => (l.clave === clave ? { ...l, cantidad: l.cantidad + delta } : l)).filter((l) => l.cantidad > 0));
 
-  const confirmarVenta = async (metodo: MetodoPago, cliente?: string) => {
+  const confirmarVenta = async (metodo: MetodoPago, cliente?: string, pagos?: Pago[]) => {
     const venta = {
       id: nuevoIdVenta(),
       vendida_en: new Date().toISOString(),
       metodo_pago: metodo,
       ...(cliente ? { cliente } : {}),
+      ...(pagos ? { pagos } : {}),
       items: lineas.map((l) => ({
         producto_id: l.producto.id,
         cantidad: l.cantidad,
@@ -282,7 +283,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
       )}
 
       {cobrando && lineas.length > 0 && (
-        <ModalCobro metodo={cobrando} total={total} alCerrar={() => setCobrando(null)} alConfirmar={(cliente) => confirmarVenta(cobrando, cliente)} />
+        <ModalCobro metodo={cobrando} total={total} alCerrar={() => setCobrando(null)} alConfirmar={(cliente, pagos) => confirmarVenta(cobrando, cliente, pagos)} />
       )}
 
       {verVentas && (
