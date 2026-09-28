@@ -91,3 +91,48 @@ export interface AlertaStock {
   stock_actual: number;
   stock_minimo: number;
 }
+
+/** Resumen que guarda "Finalizar día" (turnos.resumen). */
+export interface ResumenDia {
+  abierto_en: string;
+  hasta: string;
+  abierto_por?: string;
+  cerrado_por?: string;
+  base_inicial: number;
+  ventas: number;
+  anuladas: number;
+  total: number;
+  efectivo: number;
+  bold: number;
+  nequi: number;
+  fiado: number;
+  cobros_fiado: { efectivo: number; bold: number; nequi: number };
+  perros: number;
+  bebidas: number;
+  adicionales: number;
+  productos: { nombre: string; tipo: string; cantidad: number; total: number }[];
+  fiados: { cliente: string; total: number }[];
+  retiros: number;
+  retiros_detalle: { tercero: string; motivo: string | null; monto: number; hora: string }[];
+  efectivo_esperado: number;
+  efectivo_contado: number;
+  diferencia_efectivo: number;
+  bold_esperado: number;
+  nequi_esperado: number;
+  bancos_esperado: number;
+  bold_declarado: number;
+  nequi_declarado: number;
+  bancos_declarado: number;
+  diferencia_bancos: number;
+  notas: string | null;
+}
+
+export interface RetiroCaja {
+  id: string;
+  monto: number;
+  tercero: string;
+  motivo: string | null;
+  creado_en: string;
+  registrado_por: string;
+  puede_anular: boolean;
+}

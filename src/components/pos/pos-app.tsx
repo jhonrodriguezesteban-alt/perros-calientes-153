@@ -13,7 +13,7 @@ import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Perfil, Producto, 
 import { ModalCobro } from "./modal-cobro";
 import { ModalPerro } from "./modal-perro";
 import { ModalSolicitar } from "./modal-solicitar";
-import { ModalTurno } from "./modal-turno";
+import { ModalCaja } from "./modal-caja";
 import { ModalVentasHoy } from "./modal-ventas-hoy";
 import { PanelPedido } from "./panel-pedido";
 import { useColaVentas } from "./use-cola-ventas";
@@ -171,10 +171,10 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
             <ClipboardPlus className="size-5" />
             <span className="hidden lg:inline">Pedir</span>
           </Chip>
-          <Chip onClick={() => setVerTurno(true)} tono={turno === null ? "alerta" : "normal"} etiqueta="Turno">
+          <Chip onClick={() => setVerTurno(true)} etiqueta="Caja">
             <Store className="size-5" />
             <span className="hidden md:inline">
-              {turno === undefined ? "Turno…" : turno ? `Turno ${horaBogota(turno.abierto_en)}` : "Abrir turno"}
+              {turno ? `Caja · ${horaBogota(turno.abierto_en)}` : "Caja"}
             </span>
           </Chip>
           <Chip onClick={() => setVerVentas(true)} etiqueta="Ventas de hoy">
@@ -300,12 +300,12 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
       )}
 
       {verTurno && turno !== undefined && (
-        <ModalTurno
+        <ModalCaja
           turno={turno}
           pendientes={pendientes}
           alCerrar={() => setVerTurno(false)}
-          alCambiar={(m) => {
-            avisar("exito", m);
+          alCambiar={(m, d) => {
+            avisar("exito", m, d);
             void refrescarEstado();
           }}
         />
