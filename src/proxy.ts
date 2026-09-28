@@ -24,12 +24,13 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims valida el token localmente (sin ir a Supabase) cuando el
+  // proyecto usa llaves asimétricas; si no, hace la misma consulta que getUser.
+  const { data } = await supabase.auth.getClaims();
+  const usuario = data?.claims?.sub;
 
   const esLogin = request.nextUrl.pathname.startsWith("/login");
-  if (!user && !esLogin) {
+  if (!usuario && !esLogin) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
   return respuesta;

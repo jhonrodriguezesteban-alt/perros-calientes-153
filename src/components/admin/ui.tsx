@@ -3,18 +3,28 @@
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+// Últimos datos de cada cargador: al volver a un módulo se muestran al
+// instante mientras se actualizan por detrás.
+const cacheDatos = new WeakMap<() => Promise<unknown>, unknown>();
+
 /**
  * Carga datos de forma asíncrona. `cargar` debe ser estable (definida fuera
  * del componente o con useCallback). `recargar()` vuelve a pedirlos.
  */
 export function useDatos<T>(cargar: () => Promise<T>) {
-  const [estado, setEstado] = useState<{ data?: T; error?: string; cargando: boolean }>({ cargando: true });
+  const [estado, setEstado] = useState<{ data?: T; error?: string; cargando: boolean }>(() => ({
+    data: cacheDatos.get(cargar) as T | undefined,
+    cargando: true,
+  }));
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let activo = true;
     cargar()
-      .then((data) => activo && setEstado({ data, cargando: false }))
+      .then((data) => {
+        cacheDatos.set(cargar, data);
+        if (activo) setEstado({ data, cargando: false });
+      })
       .catch((e: unknown) => activo && setEstado({ error: mensajeError(e), cargando: false }));
     return () => {
       activo = false;
