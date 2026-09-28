@@ -1,21 +1,52 @@
 "use client";
 
-import { Boxes, ClipboardList, HandCoins, Landmark, LayoutDashboard, LogOut, PiggyBank, ShoppingCart, Store, Utensils } from "lucide-react";
+import {
+  Boxes,
+  ClipboardList,
+  HandCoins,
+  Landmark,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  PiggyBank,
+  ShoppingCart,
+  Store,
+  Utensils,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseNavegador } from "@/lib/supabase/client";
 
-const ENLACES = [
-  { href: "/panel", nombre: "Hoy", Icono: LayoutDashboard },
-  { href: "/panel/solicitudes", nombre: "Solicitudes", Icono: ClipboardList },
-  { href: "/panel/inventario", nombre: "Inventario", Icono: Boxes },
-  { href: "/panel/compras", nombre: "Compras", Icono: ShoppingCart },
-  { href: "/panel/caja", nombre: "Caja", Icono: Landmark },
-  { href: "/panel/deudores", nombre: "Deudores", Icono: HandCoins },
-  { href: "/panel/finanzas", nombre: "Finanzas", Icono: PiggyBank },
-  { href: "/panel/catalogo", nombre: "Menú", Icono: Utensils },
+const GRUPOS = [
+  {
+    titulo: "Día a día",
+    enlaces: [
+      { href: "/pos", nombre: "Punto de venta", ayuda: "Vender", Icono: Store },
+      { href: "/panel", nombre: "Hoy", ayuda: "Ventas del día y del mes", Icono: LayoutDashboard },
+      { href: "/panel/caja", nombre: "Caja", ayuda: "Cierres y retiros", Icono: Landmark },
+      { href: "/panel/solicitudes", nombre: "Solicitudes", ayuda: "Lo que pide Andrea", Icono: ClipboardList },
+    ],
+  },
+  {
+    titulo: "Mercancía",
+    enlaces: [
+      { href: "/panel/inventario", nombre: "Inventario", ayuda: "Stock y conteos", Icono: Boxes },
+      { href: "/panel/compras", nombre: "Compras", ayuda: "Registrar facturas", Icono: ShoppingCart },
+      { href: "/panel/catalogo", nombre: "Menú", ayuda: "Productos y precios", Icono: Utensils },
+    ],
+  },
+  {
+    titulo: "Dinero",
+    enlaces: [
+      { href: "/panel/deudores", nombre: "Deudores", ayuda: "Fiados por cobrar", Icono: HandCoins },
+      { href: "/panel/finanzas", nombre: "Finanzas", ayuda: "Gastos y punto de equilibrio", Icono: PiggyBank },
+    ],
+  },
 ];
+
+const TODOS = GRUPOS.flatMap((g) => g.enlaces);
 
 async function contarPendientes() {
   const { count } = await supabaseNavegador()
@@ -25,9 +56,18 @@ async function contarPendientes() {
   return count ?? 0;
 }
 
-export function NavAdmin({ nombre }: { nombre: string }) {
+const esActivo = (href: string, ruta: string) => (href === "/panel" ? ruta === "/panel" : ruta.startsWith(href));
+
+/**
+ * Menú de módulos a la izquierda. En pantallas grandes queda fijo (el botón
+ * de hamburguesa lo oculta o lo muestra); en tablet y celular se abre encima.
+ */
+export function NavAdmin({ nombre, children }: { nombre: string; children: React.ReactNode }) {
   const ruta = usePathname();
   const [pendientes, setPendientes] = useState(0);
+  const [abierto, setAbierto] = useState(false); // celular / tablet
+  const [fijo, setFijo] = useState(true); // pantallas grandes
+  const actual = TODOS.find((e) => esActivo(e.href, ruta));
 
   // Contador de solicitudes pendientes, en vivo.
   useEffect(() => {
@@ -45,44 +85,111 @@ export function NavAdmin({ nombre }: { nombre: string }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!abierto) return;
+    const alTecla = (e: KeyboardEvent) => e.key === "Escape" && setAbierto(false);
+    window.addEventListener("keydown", alTecla);
+    return () => window.removeEventListener("keydown", alTecla);
+  }, [abierto]);
+
+  const alternar = () => {
+    if (window.matchMedia("(min-width: 1024px)").matches) setFijo((f) => !f);
+    else setAbierto((a) => !a);
+  };
+
   return (
-    <header className="sticky top-0 z-30 bg-cafe text-crema shadow-md">
-      <div className="flex items-center gap-3 px-4 pt-3 sm:px-8">
+    <div className="min-h-dvh">
+      {/* Barra superior */}
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-2 bg-cafe px-2 text-crema shadow-md sm:px-4">
+        <button
+          onClick={alternar}
+          aria-label="Abrir o cerrar el menú"
+          aria-expanded={abierto}
+          className="grid size-12 place-items-center rounded-full active:bg-cafe-700"
+        >
+          <Menu className="size-7" />
+        </button>
         <p className="whitespace-nowrap font-titulo text-xl font-extrabold leading-none sm:text-2xl">
           Bendito <span className="text-mostaza">Perro</span> Caliente
         </p>
-        <span className="hidden font-etiqueta text-sm font-semibold text-cafe-300 sm:inline">Hola, {nombre}</span>
-        <div className="ml-auto flex items-center gap-1">
-          <Link href="/pos" className="flex h-11 items-center gap-2 rounded-full px-4 font-etiqueta text-sm font-semibold active:bg-cafe-700">
-            <Store className="size-5" /> <span className="hidden sm:inline">Ir al POS</span>
-          </Link>
-          <form action="/salir" method="post">
-            <button aria-label="Cerrar sesión" className="grid size-11 place-items-center rounded-full active:bg-cafe-700">
-              <LogOut className="size-5" />
-            </button>
-          </form>
+        {actual && (
+          <span className="ml-2 hidden items-center gap-2 rounded-full bg-cafe-700 px-3 py-1 font-etiqueta text-sm font-semibold sm:flex">
+            <actual.Icono className="size-4" /> {actual.nombre}
+          </span>
+        )}
+        <Link
+          href="/pos"
+          className="ml-auto flex h-11 items-center gap-2 rounded-full bg-mostaza px-4 font-etiqueta text-sm font-extrabold text-cafe active:bg-mostaza-100"
+        >
+          <Store className="size-5" /> <span className="hidden sm:inline">Ir al POS</span>
+        </Link>
+      </header>
+
+      {/* Fondo oscuro en celular/tablet */}
+      {abierto && <div onClick={() => setAbierto(false)} className="fixed inset-0 z-40 bg-cafe/50 lg:hidden" aria-hidden />}
+
+      {/* Menú lateral */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-cafe text-crema shadow-2xl transition-transform duration-200 lg:top-16 lg:z-20 lg:shadow-none ${
+          abierto ? "translate-x-0" : "-translate-x-full"
+        } ${fijo ? "lg:translate-x-0" : "lg:-translate-x-full"}`}
+      >
+        <div className="flex items-center justify-between px-5 pb-2 pt-4 lg:hidden">
+          <p className="font-etiqueta text-sm font-semibold text-cafe-300">Hola, {nombre}</p>
+          <button onClick={() => setAbierto(false)} aria-label="Cerrar menú" className="grid size-11 place-items-center rounded-full active:bg-cafe-700">
+            <X className="size-6" />
+          </button>
         </div>
+        <p className="hidden px-5 pb-1 pt-5 font-etiqueta text-sm font-semibold text-cafe-300 lg:block">Hola, {nombre}</p>
+
+        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+          {GRUPOS.map((g) => (
+            <div key={g.titulo} className="mt-4">
+              <p className="px-3 pb-1 font-etiqueta text-xs font-semibold uppercase tracking-wider text-cafe-300">{g.titulo}</p>
+              <ul className="space-y-1">
+                {g.enlaces.map(({ href, nombre: n, ayuda, Icono }) => {
+                  const activo = esActivo(href, ruta);
+                  return (
+                    <li key={href}>
+                      <Link
+                        href={href}
+                        onClick={() => setAbierto(false)}
+                        aria-current={activo ? "page" : undefined}
+                        className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 ${
+                          activo ? "bg-crema text-cafe" : "text-crema active:bg-cafe-700 lg:hover:bg-cafe-700"
+                        }`}
+                      >
+                        <Icono className="size-6 shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-etiqueta text-base font-extrabold leading-tight">{n}</span>
+                          <span className={`block truncate text-xs ${activo ? "text-cafe-700" : "text-cafe-300"}`}>{ayuda}</span>
+                        </span>
+                        {href === "/panel/solicitudes" && pendientes > 0 && (
+                          <span className="numeros grid min-w-6 place-items-center rounded-full bg-rojo px-1.5 text-xs font-bold text-white">
+                            {pendientes}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <form action="/salir" method="post" className="border-t border-cafe-700 p-3">
+          <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 font-etiqueta font-semibold text-cafe-300 active:bg-cafe-700 lg:hover:bg-cafe-700">
+            <LogOut className="size-5" /> Cerrar sesión
+          </button>
+        </form>
+      </aside>
+
+      <div className="flex">
+        {/* Deja el espacio del menú fijo en pantallas grandes */}
+        <div aria-hidden className={`hidden shrink-0 transition-[width] duration-200 lg:block ${fijo ? "lg:w-72" : "lg:w-0"}`} />
+        <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 sm:px-8">{children}</main>
       </div>
-      <nav className="flex gap-1 overflow-x-auto px-3 pb-2 pt-2 sm:px-7">
-        {ENLACES.map(({ href, nombre, Icono }) => {
-          const activo = href === "/panel" ? ruta === "/panel" : ruta.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`relative flex h-11 shrink-0 items-center gap-2 rounded-full px-4 font-etiqueta text-sm font-semibold ${
-                activo ? "bg-crema text-cafe" : "text-crema active:bg-cafe-700"
-              }`}
-            >
-              <Icono className="size-4" />
-              {nombre}
-              {href === "/panel/solicitudes" && pendientes > 0 && (
-                <span className="numeros grid min-w-6 place-items-center rounded-full bg-rojo px-1.5 text-xs text-white">{pendientes}</span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-    </header>
+    </div>
   );
 }
