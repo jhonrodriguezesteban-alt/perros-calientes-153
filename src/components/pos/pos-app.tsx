@@ -13,7 +13,7 @@ import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Pago, Perfil, Prod
 import { ModalCobro } from "./modal-cobro";
 import { ModalPerro } from "./modal-perro";
 import { ModalSolicitar } from "./modal-solicitar";
-import { ModalCaja } from "./modal-caja";
+import { ModalCaja, type Vista as VistaCaja } from "./modal-caja";
 import { ModalVentasHoy } from "./modal-ventas-hoy";
 import { PanelPedido } from "./panel-pedido";
 import { useColaVentas } from "./use-cola-ventas";
@@ -42,6 +42,9 @@ async function obtenerEstado() {
 }
 
 /** POS de la tablet. Se renderiza solo en el navegador (usa localStorage para trabajar sin internet). */
+const diaBogota = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" });
+const fechaCorta = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "short", timeZone: "America/Bogota" });
+
 export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoInicial: Catalogo | null }) {
   // Catálogo: el del servidor si llegó; si no (sin internet), el último guardado.
   const [catalogo] = useState<Catalogo | null>(() => catalogoInicial ?? leerLocal<Catalogo>(CLAVE_CATALOGO));
@@ -51,6 +54,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   const [cobrando, setCobrando] = useState<MetodoPago | null>(null);
   const [verVentas, setVerVentas] = useState(false);
   const [verTurno, setVerTurno] = useState(false);
+  const [vistaCaja, setVistaCaja] = useState<VistaCaja>("inicio");
   const [verAlertas, setVerAlertas] = useState(false);
   // undefined = cerrado; null = abierto sin insumo elegido; número = insumo preseleccionado
   const [pidiendo, setPidiendo] = useState<number | null | undefined>(undefined);
@@ -148,6 +152,20 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
     }
   };
 
+  // Para vender la caja tiene que estar abierta hoy. Si no se sabe (sin
+  // internet al abrir el POS), se deja vender: la venta queda en la tablet.
+  const hoy = diaBogota.format(new Date());
+  const cajaDeOtroDia = !!turno && diaBogota.format(new Date(turno.abierto_en)) !== hoy;
+  const cajaBloqueada = turno === null || cajaDeOtroDia;
+  const verCaja = (vista: VistaCaja) => {
+    setVistaCaja(vista);
+    setVerTurno(true);
+  };
+  const cobrar = (metodo: MetodoPago) => {
+    if (cajaBloqueada) verCaja(cajaDeOtroDia ? "finalizar" : "abrir");
+    else setCobrando(metodo);
+  };
+
   return (
     <div className="tactil flex h-dvh flex-col overflow-hidden">
       {/* Encabezado */}
@@ -172,7 +190,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
             <ClipboardPlus className="size-5" />
             <span className="hidden lg:inline">Pedir</span>
           </Chip>
-          <Chip onClick={() => setVerTurno(true)} etiqueta="Caja">
+          <Chip onClick={() => verCaja("inicio")} tono={cajaBloqueada ? "alerta" : "normal"} etiqueta="Caja">
             <Store className="size-5" />
             <span className="hidden md:inline">
               {turno ? `Caja · ${horaBogota(turno.abierto_en)}` : "Caja"}
@@ -199,6 +217,21 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
         {/* Catálogo */}
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto px-4 pb-28 pt-5 sm:px-6 lg:pb-6">
+            {cajaBloqueada && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-mostaza-100 px-5 py-4 ring-2 ring-mostaza">
+                <p className="font-etiqueta text-lg font-semibold">
+                  {cajaDeOtroDia
+                    ? `La caja del ${fechaCorta.format(new Date(turno!.abierto_en))} sigue abierta. Finaliza ese día antes de vender hoy.`
+                    : "La caja está cerrada. Ábrela con la base para empezar a vender."}
+                </p>
+                <button
+                  onClick={() => verCaja(cajaDeOtroDia ? "finalizar" : "abrir")}
+                  className="h-14 rounded-2xl bg-rojo px-6 font-etiqueta text-lg font-extrabold text-white active:bg-rojo-700"
+                >
+                  {cajaDeOtroDia ? "Finalizar ese día" : "Abrir caja"}
+                </button>
+              </div>
+            )}
             {!catalogo ? (
               <p className="py-20 text-center text-lg text-cafe-300">
                 No pudimos cargar el menú. Revisa la conexión y recarga la página.
@@ -235,7 +268,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
             alEditar={(l) => setArmando({ producto: l.producto, linea: l })}
             alAgregarBebida={(b) => setLineas((ls) => agregarLinea(ls, b, []))}
             alVaciar={() => setLineas([])}
-            alCobrar={setCobrando}
+            alCobrar={cobrar}
           />
         </aside>
       </div>
@@ -259,7 +292,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
               alEditar={(l) => setArmando({ producto: l.producto, linea: l })}
               alAgregarBebida={(b) => setLineas((ls) => agregarLinea(ls, b, []))}
               alVaciar={() => setLineas([])}
-              alCobrar={setCobrando}
+              alCobrar={cobrar}
             />
           </div>
         </Modal>
@@ -304,6 +337,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
         <ModalCaja
           turno={turno}
           pendientes={pendientes}
+          vistaInicial={vistaCaja}
           alCerrar={() => setVerTurno(false)}
           alCambiar={(m, d) => {
             avisar("exito", m, d);

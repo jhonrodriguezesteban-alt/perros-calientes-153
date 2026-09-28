@@ -8,7 +8,7 @@ import { cop, horaBogota } from "@/lib/formato";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import type { ResumenDia, RetiroCaja, Turno } from "@/lib/tipos";
 
-type Vista = "inicio" | "abrir" | "retiro" | "finalizar";
+export type Vista = "inicio" | "abrir" | "retiro" | "finalizar";
 
 const MOTIVOS = ["Entrega a socio", "Pago a proveedor", "Compra de insumos", "Pago a empleada"];
 
@@ -23,15 +23,18 @@ const mensajeDe = (error: { code?: string; message: string }) => (error.code ? e
 export function ModalCaja({
   turno,
   pendientes,
+  vistaInicial = "inicio",
   alCerrar,
   alCambiar,
 }: {
   turno: Turno | null;
   pendientes: number;
+  /** Para abrir directo en "Abrir día" o "Finalizar día". */
+  vistaInicial?: Vista;
   alCerrar: () => void;
   alCambiar: (mensaje: string, detalle?: string) => void;
 }) {
-  const [vista, setVista] = useState<Vista>("inicio");
+  const [vista, setVista] = useState<Vista>(vistaInicial);
   const [retiros, setRetiros] = useState<RetiroCaja[] | null>(null);
   const [resumen, setResumen] = useState<ResumenDia | null>(null);
 
