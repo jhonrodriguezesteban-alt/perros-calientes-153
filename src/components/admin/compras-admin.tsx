@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Camera, ChevronDown, Images, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { db, FAMILIAS, fechaCorta, hoyBogota, PAGOS_COMPRA, type Compra, type Insumo, type PagoCompra, type Solicitud } from "@/lib/admin";
+import { NOMBRE_MEDIO_FACTURA, prepararFoto, type FacturaLeida, type ItemLeido } from "@/lib/factura";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { costoTexto } from "./inventario-admin";
 import { ModalInsumo } from "./modal-insumo";
@@ -16,6 +17,7 @@ import {
   EntradaNumero,
   EntradaPesos,
   exigir,
+  Insignia,
   mensajeError,
   MensajeError,
   Selector,
@@ -30,6 +32,8 @@ interface Linea {
   insumo_id: number | null;
   cantidad: string;
   costo_total: number | null;
+  /** Si vino de leer la foto de la factura. */
+  leido?: ItemLeido;
 }
 
 const SELECT_COMPRA =
@@ -85,6 +89,10 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [inicialAplicada, setInicialAplicada] = useState(false);
+  const [leyendo, setLeyendo] = useState(false);
+  const [lectura, setLectura] = useState<FacturaLeida | null>(null);
+  const camara = useRef<HTMLInputElement>(null);
+  const galeria = useRef<HTMLInputElement>(null);
 
   const insumos = useMemo(() => new Map((data?.insumos ?? []).map((i) => [i.id, i])), [data]);
   const proveedores = useMemo(
@@ -120,6 +128,41 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
   }
 
   const total = lineas.reduce((s, l) => s + (l.costo_total ?? 0), 0);
+
+  // Lee la foto (o fotos) de la factura con Claude y llena el formulario para revisarlo.
+  const leerFactura = async (archivos: FileList | null) => {
+    if (!archivos || archivos.length === 0) return;
+    setAviso(null);
+    setLeyendo(true);
+    try {
+      const fotos = await Promise.all([...archivos].slice(0, 4).map(prepararFoto));
+      const res = await fetch("/api/compras/leer-factura", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fotos }),
+      });
+      const cuerpo = res.headers.get("content-type")?.includes("application/json") ? await res.json() : null;
+      if (!res.ok || !cuerpo) throw new Error(cuerpo?.error ?? "No se pudo leer la factura. Revisa la conexión e intenta de nuevo.");
+      const f = cuerpo as FacturaLeida;
+      if (f.items.length === 0) throw new Error(f.observaciones ?? "No encontré productos en la foto.");
+      setLectura(f);
+      if (f.proveedor) setProveedor(f.proveedor);
+      if (f.fecha && f.fecha <= hoyBogota()) setFecha(f.fecha);
+      setLineas(
+        f.items.map((it) => ({
+          ...lineaVacia(it.insumo_id, String(Math.round(it.cantidad * 100) / 100)),
+          costo_total: it.costo_total,
+          leido: it,
+        })),
+      );
+    } catch (e) {
+      setAviso({ tipo: "error", texto: mensajeError(e) });
+    } finally {
+      setLeyendo(false);
+      if (camara.current) camara.current.value = "";
+      if (galeria.current) galeria.current.value = "";
+    }
+  };
 
   // Corregir con qué se pagó una compra ya registrada
   const cambiarPago = async (c: Compra, pago: PagoCompra) => {
@@ -166,6 +209,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
       setProveedor("");
       setPagadoCon(null);
       setSocioId("");
+      setLectura(null);
       recargar();
     } catch (e) {
       setAviso({ tipo: "error", texto: mensajeError(e) });
@@ -187,6 +231,26 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
         <>
           <Tarjeta>
             <Subtitulo>Nueva compra</Subtitulo>
+            <div className="mb-5 rounded-2xl bg-mostaza-100/60 p-4 ring-2 ring-mostaza">
+              <p className="flex items-center gap-2 font-etiqueta font-extrabold">
+                <Sparkles className="size-5 text-rojo" /> Llenar con la foto de la factura
+              </p>
+              <p className="mt-1 text-sm text-cafe-700">
+                Toma la foto y se leen los productos, gramajes, cantidades, valores y el proveedor. Revisas y eliges con qué se pagó.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Boton onClick={() => camara.current?.click()} cargando={leyendo}>
+                  <Camera className="size-5" /> {leyendo ? "Leyendo la factura…" : "Tomar foto"}
+                </Boton>
+                <Boton variante="suave" onClick={() => galeria.current?.click()} disabled={leyendo}>
+                  <Images className="size-5" /> Subir foto(s)
+                </Boton>
+              </div>
+              <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void leerFactura(e.target.files)} />
+              <input ref={galeria} type="file" accept="image/*" multiple hidden onChange={(e) => void leerFactura(e.target.files)} />
+              {leyendo && <p className="mt-2 text-sm text-cafe-700">Esto tarda entre 20 segundos y un minuto.</p>}
+            </div>
+            {lectura && <ResumenLectura lectura={lectura} total={total} />}
             <div className="grid gap-4 sm:grid-cols-2">
               <Campo etiqueta="Fecha">
                 <Entrada type="date" value={fecha} max={hoyBogota()} onChange={(e) => setFecha(e.target.value)} />
@@ -274,6 +338,25 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                           </span>
                         )}
                       </p>
+                    )}
+                    {l.leido && (
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-cafe-700 sm:col-span-4">
+                        <span>
+                          Factura: <strong>{l.leido.descripcion}</strong> · {l.leido.presentacion}
+                        </span>
+                        {l.leido.confianza !== "alta" && (
+                          <Insignia tono={l.leido.confianza === "baja" ? "peligro" : "alerta"}>Revisar</Insignia>
+                        )}
+                        {l.leido.nota && <span className="italic">{l.leido.nota}</span>}
+                        {!l.insumo_id && (
+                          <button
+                            onClick={() => setCreandoInsumoPara(l.clave)}
+                            className="rounded-lg bg-mostaza px-2 py-1 font-etiqueta text-xs font-extrabold text-cafe"
+                          >
+                            + Crear “{l.leido.nombre_sugerido ?? l.leido.descripcion}”
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
@@ -445,6 +528,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
 
       {creandoInsumoPara !== null && (
         <ModalInsumo
+          {...propsInsumoNuevo(lineas.find((l) => l.clave === creandoInsumoPara))}
           alCerrar={() => setCreandoInsumoPara(null)}
           alGuardar={(nuevo) => {
             cambiarLinea(creandoInsumoPara, { insumo_id: nuevo.id });
@@ -470,4 +554,42 @@ function agruparPorSocio(compras: Compra[]) {
     m.set(n, (m.get(n) ?? 0) + c.compra_items.reduce((s, i) => s + i.costo_total, 0));
   }
   return m;
+}
+
+function propsInsumoNuevo(l: Linea | undefined) {
+  const it = l?.leido;
+  if (!it) return {};
+  return {
+    nombreInicial: it.nombre_sugerido ?? it.descripcion,
+    familiaInicial: it.familia_sugerida,
+    unidadInicial: it.unidad,
+    costoInicial: it.cantidad > 0 ? it.costo_total / it.cantidad : undefined,
+  };
+}
+
+/** Lo que se leyó de la factura: total impreso vs. suma de renglones y avisos. */
+function ResumenLectura({ lectura, total }: { lectura: FacturaLeida; total: number }) {
+  const diferencia = lectura.total_factura !== null ? lectura.total_factura - total : 0;
+  const sinInsumo = lectura.items.filter((i) => i.insumo_id === null).length;
+  return (
+    <div className="mb-5 space-y-1 rounded-2xl bg-crema-200/60 p-4 text-sm ring-1 ring-cafe-100">
+      <p className="font-etiqueta font-semibold">
+        Leí {lectura.items.length} {lectura.items.length === 1 ? "producto" : "productos"}
+        {lectura.proveedor && ` de ${lectura.proveedor}`} · la factura dice {NOMBRE_MEDIO_FACTURA[lectura.medio_pago]}.
+      </p>
+      {lectura.total_factura !== null && (
+        <p className={Math.abs(diferencia) >= 50 ? "font-semibold text-rojo" : "text-cafe-700"}>
+          Total de la factura {cop(lectura.total_factura)} · suma de los renglones {cop(total)}
+          {Math.abs(diferencia) >= 50 && ` → ${diferencia > 0 ? "faltan" : "sobran"} ${cop(Math.abs(diferencia))}; revisa los valores`}
+        </p>
+      )}
+      {sinInsumo > 0 && (
+        <p className="text-cafe-700">
+          {sinInsumo} {sinInsumo === 1 ? "producto no coincide" : "productos no coinciden"} con ningún insumo: créalo o elígelo en la lista.
+        </p>
+      )}
+      {lectura.observaciones && <p className="italic text-cafe-700">{lectura.observaciones}</p>}
+      <p className="text-cafe-700">Revisa todo antes de registrar: nada se guarda hasta que presiones “Registrar compra”.</p>
+    </div>
+  );
 }
