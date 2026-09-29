@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown, Pencil, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { ResumenCierre } from "@/components/resumen-cierre";
 import { db } from "@/lib/admin";
@@ -76,6 +76,25 @@ export function CajaAdmin() {
   const { data, error, cargando, recargar } = useDatos(cargarCaja);
   const [corrigiendo, setCorrigiendo] = useState<Cierre | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [ordenando, setOrdenando] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  // Trae a este cierre las ventas del mismo día que quedaron en otra caja
+  // (p. ej. vendidas antes de abrir, con la caja del día anterior abierta).
+  const traerVentas = async (c: Cierre) => {
+    setOrdenando(c.id);
+    setAviso(null);
+    try {
+      const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date(c.abierto_en));
+      const n = exigir(await db().rpc("reasignar_ventas_dia", { p_fecha: dia })) as number;
+      setAviso(n > 0 ? `Listo: ${n} ${n === 1 ? "venta pasó" : "ventas pasaron"} a este cierre y se recalculó.` : "Todas las ventas de ese día ya estaban en este cierre.");
+      recargar();
+    } catch (e) {
+      setAviso(mensajeError(e));
+    } finally {
+      setOrdenando(null);
+    }
+  };
 
   const retirosVigentes = (data?.retiros ?? []).filter((r) => !r.anulado_en);
   const porTercero = new Map<string, number>();
@@ -86,6 +105,7 @@ export function CajaAdmin() {
       <Encabezado titulo="Caja" descripcion="Cierre de cada día (efectivo y bancos: lo que dice el sistema vs. lo declarado) y retiros de efectivo." />
       {cargando && !data && <Cargando />}
       {error && <MensajeError>{error}</MensajeError>}
+      {aviso && <p className="rounded-2xl bg-cafe px-4 py-3 font-semibold text-crema">{aviso}</p>}
 
       {data && (
         <>
@@ -132,9 +152,14 @@ export function CajaAdmin() {
                               c.base_esperada !== c.base_inicial &&
                               ` · el cierre anterior dejó ${cop(c.base_esperada)} (${c.base_inicial > c.base_esperada ? "+" : "−"}${cop(Math.abs(c.base_inicial - c.base_esperada))})`}
                           </p>
-                          <Boton variante="suave" className="min-h-10 px-3 text-sm" onClick={() => setCorrigiendo(c)}>
-                            <Pencil className="size-4" /> Corregir cierre
-                          </Boton>
+                          <span className="flex flex-wrap gap-2">
+                            <Boton variante="suave" className="min-h-10 px-3 text-sm" onClick={() => void traerVentas(c)} cargando={ordenando === c.id}>
+                              <RefreshCw className="size-4" /> Traer ventas de este día
+                            </Boton>
+                            <Boton variante="suave" className="min-h-10 px-3 text-sm" onClick={() => setCorrigiendo(c)}>
+                              <Pencil className="size-4" /> Corregir cierre
+                            </Boton>
+                          </span>
                         </div>
                         <ResumenCierre resumen={c.resumen} compartir />
                       </div>
