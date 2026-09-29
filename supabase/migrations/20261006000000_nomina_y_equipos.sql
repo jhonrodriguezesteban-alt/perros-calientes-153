@@ -18,8 +18,8 @@
 -- ---------------------------------------------------------------------
 -- Compras con equipos
 -- ---------------------------------------------------------------------
-alter table gastos add column compra_id uuid references compras (id) on delete cascade;
-create index on gastos (compra_id);
+alter table gastos add column if not exists compra_id uuid references compras (id) on delete cascade;
+create index if not exists gastos_compra_id_idx on gastos (compra_id);
 
 create or replace function registrar_compra(p_compra jsonb) returns uuid
 language plpgsql security definer set search_path = public as $$
@@ -109,7 +109,7 @@ end $$;
 -- ---------------------------------------------------------------------
 -- Nómina, vales y préstamos
 -- ---------------------------------------------------------------------
-create table pagos_personal (
+create table if not exists pagos_personal (
   id                uuid primary key default gen_random_uuid(),
   fecha             date not null default hoy_bogota(),
   persona           text not null check (trim(persona) <> ''),
@@ -130,10 +130,11 @@ create table pagos_personal (
   constraint pagos_personal_abono check (tipo <> 'abono' or pagado_con in ('efectivo', 'transferencia', 'fondo')),
   constraint pagos_personal_prestamo check (tipo not in ('prestamo', 'abono') or pagado_con <> 'socio')
 );
-create index on pagos_personal (fecha desc);
-create index on pagos_personal (persona);
+create index if not exists pagos_personal_fecha_idx on pagos_personal (fecha desc);
+create index if not exists pagos_personal_persona_idx on pagos_personal (persona);
 
 alter table pagos_personal enable row level security;
+drop policy if exists pagos_personal_socios on pagos_personal;
 create policy pagos_personal_socios on pagos_personal for select to authenticated using (es_socio());
 grant select on pagos_personal to authenticated;
 revoke insert, update, delete on pagos_personal from authenticated;
@@ -267,7 +268,13 @@ $$;
 -- ---------------------------------------------------------------------
 -- flujo_caja con préstamos: la función anterior pasa a ser la base
 -- ---------------------------------------------------------------------
-alter function flujo_caja(date, date) rename to _flujo_caja_base;
+-- (solo la primera vez: si ya existe la base, no se renombra de nuevo)
+do $$
+begin
+  if to_regprocedure('_flujo_caja_base(date, date)') is null then
+    alter function flujo_caja(date, date) rename to _flujo_caja_base;
+  end if;
+end $$;
 revoke execute on function _flujo_caja_base(date, date) from public, anon, authenticated;
 
 create or replace function flujo_caja(p_desde date, p_hasta date) returns jsonb
