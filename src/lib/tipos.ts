@@ -117,6 +117,8 @@ export interface ResumenDia {
   bold: number;
   nequi: number;
   fiado: number;
+  /** Cuántas ventas se pagaron por cada medio (para contar vouchers). */
+  transacciones?: { efectivo: number; bold: number; nequi: number; fiado: number };
   cobros_fiado: { efectivo: number; bold: number; nequi: number };
   perros: number;
   bebidas: number;

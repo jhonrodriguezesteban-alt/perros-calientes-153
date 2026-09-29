@@ -127,7 +127,11 @@ export function PanelEnVivo() {
   const total = ventas.reduce((s, v) => s + v.total, 0);
   const comisionMes = ventasMes.reduce((s, v) => s + (v.comision_datafono ?? 0), 0);
   const faltaMargen = pe ? pe.costos_fijos - pe.margen_contribucion_mes : 0;
-  const porMetodo = METODOS.map((m) => ({ m, valor: ventas.reduce((s, v) => s + montosPorMetodo(v).filter(([x]) => x === m).reduce((a, [, n]) => a + n, 0), 0) })).filter(
+  const porMetodo = METODOS.map((m) => ({
+    m,
+    valor: ventas.reduce((s, v) => s + montosPorMetodo(v).filter(([x]) => x === m).reduce((a, [, n]) => a + n, 0), 0),
+    n: ventas.filter((v) => montosPorMetodo(v).some(([x]) => x === m)).length,
+  })).filter(
     (x) => x.valor > 0 || x.m === "efectivo" || x.m === "datafono",
   );
   const avance = Math.max(0, Math.min(100, pe?.avance_pct ?? 0));
@@ -142,8 +146,13 @@ export function PanelEnVivo() {
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Tarjeta etiqueta="Ventas" valor={cop(total)} destacado />
             <Tarjeta etiqueta="Transacciones" valor={String(ventas.length)} />
-            {porMetodo.map(({ m, valor }) => (
-              <Tarjeta key={m} etiqueta={NOMBRE_METODO[m]} valor={cop(valor)} nota={total ? `${Math.round((valor / total) * 100)}%` : undefined} />
+            {porMetodo.map(({ m, valor, n }) => (
+              <Tarjeta
+                key={m}
+                etiqueta={NOMBRE_METODO[m]}
+                valor={cop(valor)}
+                nota={total ? `${n} ${n === 1 ? "transacción" : "transacciones"} · ${Math.round((valor / total) * 100)}%` : undefined}
+              />
             ))}
           </div>
         </section>

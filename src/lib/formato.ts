@@ -36,3 +36,9 @@ export const NOMBRE_METODO: Record<string, string> = {
 export function detallePagos(pagos: { metodo: string; monto: number }[] | null | undefined) {
   return (pagos ?? []).map((p) => `${NOMBRE_METODO[p.metodo] ?? p.metodo} ${cop(p.monto)}`).join(" + ");
 }
+
+/** "3 trans." para mostrar al lado de un medio de pago; vacío si no se sabe. */
+export function numTransacciones(n: number | undefined) {
+  if (n === undefined) return "";
+  return ` (${n} ${n === 1 ? "transacción" : "transacciones"})`;
+}

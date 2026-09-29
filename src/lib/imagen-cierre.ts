@@ -1,4 +1,4 @@
-import { cop, horaBogota } from "@/lib/formato";
+import { cop, horaBogota, numTransacciones } from "@/lib/formato";
 import type { ResumenDia } from "@/lib/tipos";
 
 /**
@@ -49,16 +49,16 @@ export async function imagenCierre(r: ResumenDia): Promise<Blob> {
   // Filas de cada bloque
   const efectivo: [string, number, boolean?][] = [
     ["Base", r.base_inicial],
-    ["Ventas en efectivo", r.efectivo],
+    [`Ventas en efectivo${numTransacciones(r.transacciones?.efectivo)}`, r.efectivo],
     ...(r.cobros_fiado.efectivo ? ([["Fiado cobrado en efectivo", r.cobros_fiado.efectivo]] as [string, number][]) : []),
     ...(r.retiros ? ([["Retiros", -r.retiros]] as [string, number][]) : []),
     ["Debería haber", r.efectivo_esperado, true],
     ["Hay (contado)", r.efectivo_contado, true],
   ];
   const bancos: [string, number, boolean?][] = [
-    ["Bold · sistema", r.bold_esperado],
+    [`Bold · sistema${numTransacciones(r.transacciones?.bold)}`, r.bold_esperado],
     ["Bold · recibido", r.bold_declarado],
-    ["Nequi · sistema", r.nequi_esperado],
+    [`Nequi · sistema${numTransacciones(r.transacciones?.nequi)}`, r.nequi_esperado],
     ["Nequi · recibido", r.nequi_declarado],
     ["Debería haber", r.bancos_esperado, true],
     ["Recibido", r.bancos_declarado, true],
