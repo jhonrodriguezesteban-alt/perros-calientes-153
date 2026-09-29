@@ -23,6 +23,8 @@ const nunito = Nunito_Sans({
 export const metadata: Metadata = {
   title: "Bendito Perro Caliente",
   description: "Punto de venta y panel de gestión",
+  applicationName: "Bendito Perro Caliente",
+  appleWebApp: { capable: true, title: "Bendito", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

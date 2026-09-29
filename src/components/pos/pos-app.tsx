@@ -13,6 +13,7 @@ import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Pago, Perfil, Prod
 import { ModalCobro } from "./modal-cobro";
 import { ModalPerro } from "./modal-perro";
 import { ModalSolicitar } from "./modal-solicitar";
+import { Logo } from "@/components/logo";
 import { ModalCaja, type Vista as VistaCaja } from "./modal-caja";
 import { ModalVentasHoy } from "./modal-ventas-hoy";
 import { PanelPedido } from "./panel-pedido";
@@ -170,9 +171,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
     <div className="tactil flex h-dvh flex-col overflow-hidden">
       {/* Encabezado */}
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 bg-cafe px-4 py-3 text-crema sm:px-6">
-        <p className="whitespace-nowrap font-titulo text-2xl font-extrabold leading-none sm:text-3xl">
-          Bendito <span className="text-mostaza">Perro</span> Caliente
-        </p>
+        <Logo alto={40} placa />
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           <Chip onClick={() => void sincronizar()} tono={enLinea ? "normal" : "alerta"} etiqueta="Conexión">
             {enLinea ? <Wifi className="size-5" /> : <WifiOff className="size-5" />}
