@@ -1,11 +1,11 @@
 "use client";
 
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/modal";
 import { db, hoyBogota } from "@/lib/admin";
 import { cop, detallePagos, horaBogota, NOMBRE_METODO } from "@/lib/formato";
-import { Cargando, Encabezado, Entrada, exigir, Insignia, mensajeError, MensajeError, Tarjeta, useDatos, Vacio } from "./ui";
+import { Boton, Cargando, Encabezado, Entrada, exigir, Insignia, mensajeError, MensajeError, Tarjeta, useDatos, Vacio } from "./ui";
 
 interface Dia {
   dia: string;
@@ -90,7 +90,7 @@ export function VentasAdmin() {
     async () => exigir(await db().rpc("ventas_por_dia", { p_desde: desde, p_hasta: hasta })) as Dia[],
     [desde, hasta],
   );
-  const { data, error, cargando } = useDatos(cargar);
+  const { data, error, cargando, recargar } = useDatos(cargar);
 
   const elegir = (r: Rango) => {
     setRango(r);
@@ -233,14 +233,16 @@ export function VentasAdmin() {
         </>
       )}
 
-      {diaAbierto && <DetalleDia dia={diaAbierto} alCerrar={() => setDiaAbierto(null)} />}
+      {diaAbierto && <DetalleDia dia={diaAbierto} alCerrar={() => setDiaAbierto(null)} alCambiar={recargar} />}
     </div>
   );
 }
 
-function DetalleDia({ dia, alCerrar }: { dia: string; alCerrar: () => void }) {
+function DetalleDia({ dia, alCerrar, alCambiar }: { dia: string; alCerrar: () => void; alCambiar: () => void }) {
   const [ventas, setVentas] = useState<VentaDetalle[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const [agregando, setAgregando] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -264,7 +266,7 @@ function DetalleDia({ dia, alCerrar }: { dia: string; alCerrar: () => void }) {
     return () => {
       activo = false;
     };
-  }, [dia]);
+  }, [dia, version]);
 
   const ok = useMemo(() => (ventas ?? []).filter((v) => v.estado === "completada"), [ventas]);
   const productos = useMemo(() => {
@@ -285,14 +287,23 @@ function DetalleDia({ dia, alCerrar }: { dia: string; alCerrar: () => void }) {
         for (const t of i.venta_item_toppings) if (t.precio_extra > 0) m.set(t.nombre_topping, (m.get(t.nombre_topping) ?? 0) + i.cantidad);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [ok]);
-  const porMetodo = useMemo(() => {
+  const [porMetodo, conteo] = useMemo(() => {
     const m = new Map<string, number>();
+    const n = new Map<string, number>();
+    const contar = (k: string) => n.set(k, (n.get(k) ?? 0) + 1);
     for (const v of ok) {
-      if (v.metodo_pago === "credito") m.set("credito", (m.get("credito") ?? 0) + v.total);
-      else if (v.venta_pagos.length) for (const p of v.venta_pagos) m.set(p.metodo, (m.get(p.metodo) ?? 0) + p.monto);
-      else m.set(v.metodo_pago, (m.get(v.metodo_pago) ?? 0) + v.total);
+      if (v.metodo_pago === "credito") {
+        m.set("credito", (m.get("credito") ?? 0) + v.total);
+        contar("credito");
+      } else if (v.venta_pagos.length) {
+        for (const p of v.venta_pagos) m.set(p.metodo, (m.get(p.metodo) ?? 0) + p.monto);
+        for (const k of new Set(v.venta_pagos.map((p) => p.metodo))) contar(k);
+      } else {
+        m.set(v.metodo_pago, (m.get(v.metodo_pago) ?? 0) + v.total);
+        contar(v.metodo_pago);
+      }
     }
-    return m;
+    return [m, n];
   }, [ok]);
   const total = ok.reduce((s, v) => s + v.total, 0);
 
@@ -309,9 +320,30 @@ function DetalleDia({ dia, alCerrar }: { dia: string; alCerrar: () => void }) {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Cifra etiqueta="Vendido" valor={cop(total)} nota={`${ok.length} ventas`} destacado />
             {["efectivo", "datafono", "nequi", "credito"].map((m) => (
-              <Cifra key={m} etiqueta={NOMBRE_METODO[m]} valor={cop(porMetodo.get(m) ?? 0)} />
+              <Cifra
+                key={m}
+                etiqueta={NOMBRE_METODO[m]}
+                valor={cop(porMetodo.get(m) ?? 0)}
+                nota={`${conteo.get(m) ?? 0} ${conteo.get(m) === 1 ? "transacción" : "transacciones"}`}
+              />
             ))}
           </div>
+
+          {agregando ? (
+            <VentaOlvidada
+              dia={dia}
+              alCancelar={() => setAgregando(false)}
+              alGuardar={() => {
+                setAgregando(false);
+                setVersion((x) => x + 1);
+                alCambiar();
+              }}
+            />
+          ) : (
+            <Boton variante="suave" onClick={() => setAgregando(true)} className="w-full">
+              <Plus className="size-5" /> Agregar una venta que no se registró este día
+            </Boton>
+          )}
 
           <section>
             <h3 className="mb-2 font-etiqueta font-extrabold uppercase tracking-wide text-cafe-700">Lo que se vendió</h3>
@@ -381,5 +413,133 @@ function Cifra({ etiqueta, valor, nota, destacado }: { etiqueta: string; valor: 
       <p className={`numeros font-titulo text-2xl font-extrabold ${destacado ? "text-rojo" : ""}`}>{valor}</p>
       {nota && <p className="text-xs font-semibold text-cafe-300">{nota}</p>}
     </div>
+  );
+}
+
+interface ProductoVenta {
+  id: number;
+  nombre: string;
+  precio: number;
+  tipo: string;
+}
+
+const MEDIOS_OLVIDADA = [
+  { id: "efectivo", nombre: "Efectivo" },
+  { id: "datafono", nombre: "Bold" },
+  { id: "nequi", nombre: "Nequi" },
+  { id: "credito", nombre: "Fiado" },
+] as const;
+
+/** Venta que se hizo pero no se registró: queda en ese día y el cierre se recalcula. */
+function VentaOlvidada({ dia, alCancelar, alGuardar }: { dia: string; alCancelar: () => void; alGuardar: () => void }) {
+  const [productos, setProductos] = useState<ProductoVenta[] | null>(null);
+  const [cantidades, setCantidades] = useState<Record<number, number>>({});
+  const [medio, setMedio] = useState<(typeof MEDIOS_OLVIDADA)[number]["id"] | null>(null);
+  const [cliente, setCliente] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    void db()
+      .from("productos")
+      .select("id, nombre, precio, tipo")
+      .eq("activo", true)
+      .order("tipo", { ascending: false })
+      .order("nombre")
+      .then((r) => {
+        if (!activo) return;
+        if (r.error) setError(mensajeError(r.error));
+        else setProductos(r.data as ProductoVenta[]);
+      });
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  const items = Object.entries(cantidades).filter(([, c]) => c > 0);
+  const total = items.reduce((s, [id, c]) => s + (productos?.find((p) => p.id === Number(id))?.precio ?? 0) * c, 0);
+  const cambiar = (id: number, d: number) => setCantidades((x) => ({ ...x, [id]: Math.max(0, (x[id] ?? 0) + d) }));
+
+  const guardar = async () => {
+    if (items.length === 0) return setError("Elige qué se vendió.");
+    if (!medio) return setError("Elige cómo se pagó.");
+    if (medio === "credito" && !cliente.trim()) return setError("Escribe quién quedó debiendo.");
+    setGuardando(true);
+    setError(null);
+    try {
+      exigir(
+        await db().rpc("registrar_venta_olvidada", {
+          p_fecha: dia,
+          p_venta: {
+            id: crypto.randomUUID(),
+            metodo_pago: medio,
+            cliente: medio === "credito" ? cliente.trim() : null,
+            items: items.map(([id, c]) => ({ producto_id: Number(id), cantidad: c })),
+            pagos: medio === "credito" ? [] : [{ metodo: medio, monto: total }],
+          },
+        }),
+      );
+      alGuardar();
+    } catch (e) {
+      setError(mensajeError(e));
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl bg-mostaza-100/60 p-4 ring-2 ring-mostaza">
+      <h3 className="font-etiqueta font-extrabold">Venta que no se registró</h3>
+      <p className="mb-3 text-sm text-cafe-700">
+        Queda en este día y el cierre de caja se vuelve a calcular. Se registra solo la receta base (sin adicionales).
+      </p>
+      {!productos && !error && <Loader2 className="size-6 animate-spin text-cafe-300" />}
+      {productos && (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {productos.map((p) => (
+            <li key={p.id} className="flex items-center justify-between gap-2 rounded-xl bg-crema px-3 py-2 ring-1 ring-cafe-100">
+              <span className="min-w-0">
+                <span className="block truncate font-etiqueta text-sm font-semibold">{p.nombre}</span>
+                <span className="numeros text-xs text-cafe-700">{cop(p.precio)}</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <button aria-label={`Quitar ${p.nombre}`} onClick={() => cambiar(p.id, -1)} className="grid size-9 place-items-center rounded-full ring-2 ring-cafe-100">
+                  <Minus className="size-4" />
+                </button>
+                <span className="numeros w-5 text-center font-bold">{cantidades[p.id] ?? 0}</span>
+                <button aria-label={`Agregar ${p.nombre}`} onClick={() => cambiar(p.id, 1)} className="grid size-9 place-items-center rounded-full bg-cafe text-crema">
+                  <Plus className="size-4" />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mb-2 mt-4 font-etiqueta text-sm font-semibold text-cafe-700">¿Cómo se pagó?</p>
+      <div className="flex flex-wrap gap-2">
+        {MEDIOS_OLVIDADA.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => setMedio(m.id)}
+            className={`min-h-11 rounded-xl px-4 font-etiqueta text-sm font-semibold ${medio === m.id ? "bg-cafe text-crema" : "bg-crema ring-2 ring-cafe-100"}`}
+          >
+            {m.nombre}
+          </button>
+        ))}
+      </div>
+      {medio === "credito" && (
+        <Entrada value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="¿Quién quedó debiendo?" className="mt-3" />
+      )}
+      {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+        <span className="numeros mr-auto font-titulo text-2xl font-extrabold text-rojo">{cop(total)}</span>
+        <Boton variante="suave" onClick={alCancelar}>
+          Cancelar
+        </Boton>
+        <Boton onClick={guardar} cargando={guardando}>
+          Registrar venta
+        </Boton>
+      </div>
+    </section>
   );
 }
