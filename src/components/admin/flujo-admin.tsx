@@ -33,10 +33,11 @@ interface Flujo {
   disponible: number;
   entregado_socios: { tercero: string; monto: number }[];
   puesto_por_socios: { socio: string; monto: number }[];
+  prestamos_por_cobrar?: { persona: string; monto: number }[];
   fiado_por_cobrar: number;
   periodo: {
     entradas: Record<"efectivo" | "datafono" | "nequi", { ventas: number; cobros: number; comisiones: number }>;
-    salidas: Record<string, { compras: number; gastos: number }>;
+    salidas: Record<string, { compras: number; gastos: number; prestamos?: number }>;
     retiros: { tercero: string; motivo: string | null; monto: number; fecha: string }[];
     ajustes: { cuenta: string; monto: number; nota: string | null; fecha: string }[];
   };
@@ -192,6 +193,17 @@ export function FlujoAdmin() {
                 </ul>
               )}
             </Tarjeta>
+            {(f.prestamos_por_cobrar?.length ?? 0) > 0 && (
+              <Tarjeta>
+                <Subtitulo>Préstamos por cobrar</Subtitulo>
+                <ul className="divide-y divide-cafe-100">
+                  {f.prestamos_por_cobrar!.map((x) => (
+                    <Fila key={x.persona} etiqueta={x.persona} valor={x.monto} />
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-cafe-700">Se registran en Nómina y préstamos.</p>
+              </Tarjeta>
+            )}
             <Tarjeta>
               <Subtitulo>Plata que pusieron los socios (compras y gastos)</Subtitulo>
               {f.puesto_por_socios.length === 0 ? (
@@ -271,9 +283,9 @@ function Periodo({ f }: { f: Flujo }) {
 
   const nombres: Record<string, string> = { ...Object.fromEntries(PAGOS_COMPRA.map((p) => [p.id, p.nombre])), sin_registrar: "Sin forma de pago registrada" };
   const salidas = Object.entries(f.periodo.salidas)
-    .map(([k, v]) => [nombres[k] ?? k, v.compras, v.gastos] as const)
-    .filter(([, c, g]) => c + g > 0);
-  const totalSalidas = salidas.reduce((s, [, c, g]) => s + c + g, 0);
+    .map(([k, v]) => [nombres[k] ?? k, v.compras, v.gastos, v.prestamos ?? 0] as const)
+    .filter(([, c, g, p]) => c !== 0 || g !== 0 || p !== 0);
+  const totalSalidas = salidas.reduce((s, [, c, g, p]) => s + c + g + p, 0);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -289,7 +301,7 @@ function Periodo({ f }: { f: Flujo }) {
       <section>
         <h3 className="mb-2 font-etiqueta font-extrabold uppercase tracking-wide text-cafe-700">Salió (compras y gastos)</h3>
         <ul className="divide-y divide-cafe-100">
-          {salidas.map(([k, c, g]) => (
+          {salidas.map(([k, c, g, p]) => (
             <li key={k} className="flex items-baseline justify-between gap-3 py-2">
               <span>
                 {k}
@@ -297,9 +309,10 @@ function Periodo({ f }: { f: Flujo }) {
                   {c > 0 && `compras ${cop(c)}`}
                   {c > 0 && g > 0 && " · "}
                   {g > 0 && `gastos ${cop(g)}`}
+                  {p !== 0 && `${c + g > 0 ? " · " : ""}${p > 0 ? `préstamos ${cop(p)}` : `abonos recibidos ${cop(-p)}`}`}
                 </span>
               </span>
-              <span className="numeros">{cop(c + g)}</span>
+              <span className="numeros">{cop(c + g + p)}</span>
             </li>
           ))}
           <Fila etiqueta="Total salidas" valor={totalSalidas} fuerte />

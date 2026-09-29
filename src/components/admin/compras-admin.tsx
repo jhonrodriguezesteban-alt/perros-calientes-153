@@ -32,12 +32,14 @@ interface Linea {
   insumo_id: number | null;
   cantidad: string;
   costo_total: number | null;
+  /** Equipo o utensilio que no va al inventario: qué es. */
+  equipo?: string;
   /** Si vino de leer la foto de la factura. */
   leido?: ItemLeido;
 }
 
 const SELECT_COMPRA =
-  "id, fecha, proveedor, gasto_id, pagado_con, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(cantidad, costo_total, insumos(nombre, unidad))";
+  "id, fecha, proveedor, gasto_id, pagado_con, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(cantidad, costo_total, insumos(nombre, unidad)), equipos:gastos!gastos_compra_id_fkey(monto, descripcion)";
 
 async function cargarCompras() {
   const [insumos, compras, solicitudes, socios, prestadas] = await Promise.all([
@@ -152,6 +154,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
         f.items.map((it) => ({
           ...lineaVacia(it.insumo_id, String(Math.round(it.cantidad * 100) / 100)),
           costo_total: it.costo_total,
+          equipo: it.tipo === "equipo" ? (it.nombre_sugerido ?? it.descripcion) : undefined,
           leido: it,
         })),
       );
@@ -179,8 +182,13 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
 
   const guardar = async () => {
     setAviso(null);
-    const validas = lineas.filter((l) => l.insumo_id !== null);
-    if (validas.length === 0) return setAviso({ tipo: "error", texto: "Agrega al menos un insumo." });
+    const validas = lineas.filter((l) => l.insumo_id !== null && l.equipo === undefined);
+    const equipos = lineas.filter((l) => l.equipo !== undefined);
+    if (validas.length + equipos.length === 0) return setAviso({ tipo: "error", texto: "Agrega al menos un insumo o equipo." });
+    for (const l of equipos) {
+      if (!l.equipo?.trim()) return setAviso({ tipo: "error", texto: "Escribe qué equipo o utensilio se compró." });
+      if (!l.costo_total) return setAviso({ tipo: "error", texto: `Falta cuánto costó ${l.equipo}.` });
+    }
     for (const l of validas) {
       const c = aNumero(l.cantidad);
       if (!c || c <= 0) return setAviso({ tipo: "error", texto: `Falta la cantidad de ${insumos.get(l.insumo_id!)?.nombre}.` });
@@ -199,6 +207,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
             socio_id: pagadoCon === "socio" ? socioId : null,
             registrar_gasto: registrarGasto,
             items: validas.map((l) => ({ insumo_id: l.insumo_id, cantidad: aNumero(l.cantidad), costo_total: l.costo_total })),
+            equipos: equipos.map((l) => ({ descripcion: l.equipo!.trim(), costo_total: l.costo_total })),
             solicitudes: [...solicitudes],
           },
         }),
@@ -292,10 +301,12 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                   <div key={l.clave} className="grid gap-2 rounded-2xl bg-crema-200/60 p-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end">
                     <Campo etiqueta="Insumo">
                       <Selector
-                        value={l.insumo_id ?? ""}
+                        value={l.equipo !== undefined ? "equipo" : (l.insumo_id ?? "")}
                         onChange={(e) => {
                           if (e.target.value === "nuevo") setCreandoInsumoPara(l.clave);
-                          else cambiarLinea(l.clave, { insumo_id: e.target.value ? Number(e.target.value) : null });
+                          else if (e.target.value === "equipo")
+                            cambiarLinea(l.clave, { insumo_id: null, equipo: l.leido?.nombre_sugerido ?? l.leido?.descripcion ?? "" });
+                          else cambiarLinea(l.clave, { insumo_id: e.target.value ? Number(e.target.value) : null, equipo: undefined });
                         }}
                       >
                         <option value="">Elige un insumo…</option>
@@ -312,11 +323,18 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                           );
                         })}
                         <option value="nuevo">+ Crear insumo nuevo…</option>
+                        <option value="equipo">Equipo o utensilio (no va al inventario)</option>
                       </Selector>
                     </Campo>
-                    <Campo etiqueta={`Cantidad${ins ? ` (${ins.unidad === "und" ? "unidades" : ins.unidad})` : ""}`}>
-                      <EntradaNumero valor={l.cantidad} alCambiar={(v) => cambiarLinea(l.clave, { cantidad: v })} placeholder="Ej. 1280" />
-                    </Campo>
+                    {l.equipo !== undefined ? (
+                      <Campo etiqueta="¿Qué es?">
+                        <Entrada value={l.equipo} onChange={(e) => cambiarLinea(l.clave, { equipo: e.target.value })} placeholder="Ej. Pinzas de acero" />
+                      </Campo>
+                    ) : (
+                      <Campo etiqueta={`Cantidad${ins ? ` (${ins.unidad === "und" ? "unidades" : ins.unidad})` : ""}`}>
+                        <EntradaNumero valor={l.cantidad} alCambiar={(v) => cambiarLinea(l.clave, { cantidad: v })} placeholder="Ej. 1280" />
+                      </Campo>
+                    )}
                     <Campo etiqueta="Costó en total">
                       <EntradaPesos valor={l.costo_total} alCambiar={(v) => cambiarLinea(l.clave, { costo_total: v })} placeholder="$0" />
                     </Campo>
@@ -327,7 +345,10 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                     >
                       <Trash2 className="size-5" />
                     </button>
-                    {ins && unitario !== null && (
+                    {l.equipo !== undefined && (
+                      <p className="text-sm text-cafe-700 sm:col-span-4">Queda como gasto de inversión (Equipos), no suma al inventario.</p>
+                    )}
+                    {ins && unitario !== null && l.equipo === undefined && (
                       <p className="flex items-center gap-2 text-sm text-cafe-700 sm:col-span-4">
                         Sale a <strong className="numeros">{costoTexto({ costo_unitario: unitario, unidad: ins.unidad })}</strong>
                         <span className="text-cafe-300">(antes {costoTexto(ins)})</span>
@@ -348,7 +369,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                           <Insignia tono={l.leido.confianza === "baja" ? "peligro" : "alerta"}>Revisar</Insignia>
                         )}
                         {l.leido.nota && <span className="italic">{l.leido.nota}</span>}
-                        {!l.insumo_id && (
+                        {!l.insumo_id && l.equipo === undefined && (
                           <button
                             onClick={() => setCreandoInsumoPara(l.clave)}
                             className="rounded-lg bg-mostaza px-2 py-1 font-etiqueta text-xs font-extrabold text-cafe"
@@ -443,7 +464,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
             ) : (
               <ul className="divide-y divide-cafe-100">
                 {data.compras.map((c) => {
-                  const totalCompra = c.compra_items.reduce((s, i) => s + i.costo_total, 0);
+                  const totalCompra = totalDe(c);
                   return (
                     <li key={c.id} className="py-3">
                       <button onClick={() => setAbierta(abierta === c.id ? null : c.id)} className="w-full text-left">
@@ -459,8 +480,8 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                         </div>
                         {abierta !== c.id && (
                           <p className="truncate text-sm text-cafe-700">
-                            {c.compra_items.length} {c.compra_items.length === 1 ? "producto" : "productos"}:{" "}
-                            {c.compra_items.map((i) => i.insumos?.nombre).join(", ")}
+                            {c.compra_items.length + c.equipos.length} {c.compra_items.length + c.equipos.length === 1 ? "producto" : "productos"}:{" "}
+                            {[...c.compra_items.map((i) => i.insumos?.nombre), ...c.equipos.map((e) => e.descripcion)].join(", ")}
                           </p>
                         )}
                       </button>
@@ -509,6 +530,14 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                                   <td className="px-2 py-2 text-right font-semibold">{cop(i.costo_total)}</td>
                                 </tr>
                               ))}
+                              {c.equipos.map((e, n) => (
+                                <tr key={`e${n}`} className="border-b border-cafe-100">
+                                  <td className="px-2 py-2 text-left text-cafe-300">{c.compra_items.length + n + 1}</td>
+                                  <td className="px-2 py-2 text-left font-etiqueta font-semibold">{e.descripcion}</td>
+                                  <td colSpan={2} className="px-2 py-2 text-right text-cafe-700">Equipo (no va al inventario)</td>
+                                  <td className="px-2 py-2 text-right font-semibold">{cop(e.monto)}</td>
+                                </tr>
+                              ))}
                               <tr>
                                 <td colSpan={4} className="px-2 py-2 text-right font-etiqueta font-semibold">Total</td>
                                 <td className="px-2 py-2 text-right font-titulo text-lg font-extrabold">{cop(totalCompra)}</td>
@@ -551,7 +580,7 @@ function agruparPorSocio(compras: Compra[]) {
   const m = new Map<string, number>();
   for (const c of compras) {
     const n = c.socio?.nombre ?? "Socio";
-    m.set(n, (m.get(n) ?? 0) + c.compra_items.reduce((s, i) => s + i.costo_total, 0));
+    m.set(n, (m.get(n) ?? 0) + totalDe(c));
   }
   return m;
 }
@@ -570,7 +599,7 @@ function propsInsumoNuevo(l: Linea | undefined) {
 /** Lo que se leyó de la factura: total impreso vs. suma de renglones y avisos. */
 function ResumenLectura({ lectura, total }: { lectura: FacturaLeida; total: number }) {
   const diferencia = lectura.total_factura !== null ? lectura.total_factura - total : 0;
-  const sinInsumo = lectura.items.filter((i) => i.insumo_id === null).length;
+  const sinInsumo = lectura.items.filter((i) => i.insumo_id === null && i.tipo !== "equipo").length;
   return (
     <div className="mb-5 space-y-1 rounded-2xl bg-crema-200/60 p-4 text-sm ring-1 ring-cafe-100">
       <p className="font-etiqueta font-semibold">
@@ -593,3 +622,5 @@ function ResumenLectura({ lectura, total }: { lectura: FacturaLeida; total: numb
     </div>
   );
 }
+
+const totalDe = (c: Compra) => c.compra_items.reduce((s, i) => s + i.costo_total, 0) + c.equipos.reduce((s, e) => s + e.monto, 0);

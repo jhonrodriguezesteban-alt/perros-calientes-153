@@ -59,6 +59,8 @@ export interface Compra {
   pagado_con: PagoCompra | null;
   socio: { nombre: string } | null;
   compra_items: { cantidad: number; costo_total: number; insumos: { nombre: string; unidad: Unidad } | null }[];
+  /** Equipos y utensilios de la compra (gastos de inversión, no inventario). */
+  equipos: { monto: number; descripcion: string | null }[];
 }
 
 export interface CategoriaGasto {

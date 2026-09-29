@@ -1,5 +1,6 @@
 "use client";
 
+import { CargandoMarca } from "@/components/cargando-marca";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
@@ -190,11 +191,7 @@ export function Insignia({ children, tono = "neutro" }: { children: ReactNode; t
 }
 
 export function Cargando() {
-  return (
-    <div className="grid place-items-center py-16">
-      <Loader2 className="size-8 animate-spin text-cafe-300" />
-    </div>
-  );
+  return <CargandoMarca />;
 }
 
 export function MensajeError({ children }: { children: ReactNode }) {

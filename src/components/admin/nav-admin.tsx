@@ -12,6 +12,7 @@ import {
   Receipt,
   ShoppingCart,
   Store,
+  Users,
   Utensils,
   Wallet,
   X,
@@ -45,6 +46,7 @@ const GRUPOS = [
     titulo: "Dinero",
     enlaces: [
       { href: "/panel/flujo", nombre: "Flujo de caja", ayuda: "Plata disponible y dónde está", Icono: Wallet },
+      { href: "/panel/nomina", nombre: "Nómina y préstamos", ayuda: "Pagos, vales y plata prestada", Icono: Users },
       { href: "/panel/deudores", nombre: "Deudores", ayuda: "Fiados por cobrar", Icono: HandCoins },
       { href: "/panel/finanzas", nombre: "Finanzas", ayuda: "Gastos y punto de equilibrio", Icono: PiggyBank },
     ],
@@ -105,7 +107,7 @@ export function NavAdmin({ nombre, children }: { nombre: string; children: React
   return (
     <div className="min-h-dvh">
       {/* Barra superior */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-2 bg-cafe px-2 text-crema shadow-md sm:px-4">
+      <header className="relative sticky top-0 z-30 flex h-16 items-center gap-2 bg-cafe px-2 text-crema shadow-md sm:px-4">
         <button
           onClick={alternar}
           aria-label="Abrir o cerrar el menú"
@@ -114,7 +116,7 @@ export function NavAdmin({ nombre, children }: { nombre: string; children: React
         >
           <Menu className="size-7" />
         </button>
-        <Link href="/panel" aria-label="Inicio del panel">
+        <Link href="/panel" aria-label="Inicio del panel" className="absolute left-1/2 -translate-x-1/2 sm:static sm:translate-x-0">
           <Logo alto={36} placa />
         </Link>
         {actual && (

@@ -11,6 +11,8 @@ export interface FacturaLeida {
 }
 
 export interface ItemLeido {
+  /** insumo = va al inventario; equipo = utensilio o equipo que no se gasta. */
+  tipo: "insumo" | "equipo";
   /** Tal como aparece en la factura. */
   descripcion: string;
   /** Presentación y gramaje, p. ej. "2 × paquete 8 und" o "bolsa 1.000 g". */
