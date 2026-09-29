@@ -1,18 +1,35 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import { useState } from "react";
 import { ResumenCierre } from "@/components/resumen-cierre";
 import { db } from "@/lib/admin";
 import { cop, horaBogota } from "@/lib/formato";
 import type { ResumenDia } from "@/lib/tipos";
-import { Cargando, Encabezado, exigir, Insignia, MensajeError, Subtitulo, Tarjeta, useDatos, Vacio } from "./ui";
+import { Modal } from "@/components/modal";
+import {
+  Boton,
+  Campo,
+  Cargando,
+  Encabezado,
+  Entrada,
+  EntradaPesos,
+  exigir,
+  Insignia,
+  mensajeError,
+  MensajeError,
+  Subtitulo,
+  Tarjeta,
+  useDatos,
+  Vacio,
+} from "./ui";
 
 interface Cierre {
   id: string;
   abierto_en: string;
   cerrado_en: string | null;
   base_inicial: number;
+  base_esperada: number | null;
   efectivo_esperado: number | null;
   efectivo_contado: number | null;
   diferencia: number | null;
@@ -39,7 +56,7 @@ async function cargarCaja() {
     db()
       .from("turnos")
       .select(
-        "id, abierto_en, cerrado_en, base_inicial, efectivo_esperado, efectivo_contado, diferencia, bancos_esperado, bancos_declarado, diferencia_bancos, retiros, resumen, cerrador:perfiles!turnos_cerrado_por_fkey(nombre)",
+        "id, abierto_en, cerrado_en, base_inicial, base_esperada, efectivo_esperado, efectivo_contado, diferencia, bancos_esperado, bancos_declarado, diferencia_bancos, retiros, resumen, cerrador:perfiles!turnos_cerrado_por_fkey(nombre)",
       )
       .order("abierto_en", { ascending: false })
       .limit(60),
@@ -56,7 +73,8 @@ const fecha = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric
 
 /** Cierres de caja de cada día y retiros de efectivo. */
 export function CajaAdmin() {
-  const { data, error, cargando } = useDatos(cargarCaja);
+  const { data, error, cargando, recargar } = useDatos(cargarCaja);
+  const [corrigiendo, setCorrigiendo] = useState<Cierre | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
 
   const retirosVigentes = (data?.retiros ?? []).filter((r) => !r.anulado_en);
@@ -106,7 +124,18 @@ export function CajaAdmin() {
                       </span>
                     </button>
                     {abierto === c.id && c.resumen && (
-                      <div className="mt-4">
+                      <div className="mt-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm text-cafe-700">
+                            Abrió con {cop(c.base_inicial)}
+                            {c.base_esperada !== null &&
+                              c.base_esperada !== c.base_inicial &&
+                              ` · el cierre anterior dejó ${cop(c.base_esperada)} (${c.base_inicial > c.base_esperada ? "+" : "−"}${cop(Math.abs(c.base_inicial - c.base_esperada))})`}
+                          </p>
+                          <Boton variante="suave" className="min-h-10 px-3 text-sm" onClick={() => setCorrigiendo(c)}>
+                            <Pencil className="size-4" /> Corregir cierre
+                          </Boton>
+                        </div>
                         <ResumenCierre resumen={c.resumen} compartir />
                       </div>
                     )}
@@ -153,7 +182,87 @@ export function CajaAdmin() {
           </Tarjeta>
         </>
       )}
+      {corrigiendo && (
+        <ModalCorregir
+          cierre={corrigiendo}
+          alCerrar={() => setCorrigiendo(null)}
+          alGuardar={() => {
+            setCorrigiendo(null);
+            recargar();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function ModalCorregir({ cierre, alCerrar, alGuardar }: { cierre: Cierre; alCerrar: () => void; alGuardar: () => void }) {
+  const r = cierre.resumen;
+  const [base, setBase] = useState<number | null>(cierre.base_inicial);
+  const [contado, setContado] = useState<number | null>(cierre.efectivo_contado);
+  const [bold, setBold] = useState<number | null>(r?.bold_declarado ?? 0);
+  const [nequi, setNequi] = useState<number | null>(r?.nequi_declarado ?? 0);
+  const [nota, setNota] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const esperado = (base ?? 0) + (r ? r.efectivo + r.cobros_fiado.efectivo - r.retiros : 0);
+
+  const guardar = async () => {
+    if (!nota.trim()) return setError("Escribe por qué se corrige (queda anotado en el cierre).");
+    setGuardando(true);
+    setError(null);
+    try {
+      exigir(
+        await db().rpc("corregir_cierre", {
+          p_turno_id: cierre.id,
+          p_base: base ?? 0,
+          p_efectivo_contado: contado ?? 0,
+          p_bold: bold ?? 0,
+          p_nequi: nequi ?? 0,
+          p_nota: nota.trim(),
+        }),
+      );
+      alGuardar();
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Modal
+      abierto
+      alCerrar={alCerrar}
+      titulo={`Corregir cierre del ${fecha.format(new Date(cierre.abierto_en))}`}
+      pie={
+        <Boton onClick={guardar} cargando={guardando} className="w-full">
+          Guardar corrección
+        </Boton>
+      }
+    >
+      <p className="mb-4 text-sm text-cafe-700">
+        Las ventas no cambian: solo la base y lo que se contó o declaró. El cuadre se recalcula y la corrección queda anotada.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Campo etiqueta="Base con la que abrió">
+          <EntradaPesos valor={base} alCambiar={setBase} />
+        </Campo>
+        <Campo etiqueta="Efectivo contado al cerrar" ayuda={`Debería haber ${cop(esperado)}`}>
+          <EntradaPesos valor={contado} alCambiar={setContado} />
+        </Campo>
+        <Campo etiqueta="Recibido por Bold" ayuda={r ? `Sistema: ${cop(r.bold_esperado)}` : undefined}>
+          <EntradaPesos valor={bold} alCambiar={setBold} />
+        </Campo>
+        <Campo etiqueta="Recibido por Nequi" ayuda={r ? `Sistema: ${cop(r.nequi_esperado)}` : undefined}>
+          <EntradaPesos valor={nequi} alCambiar={setNequi} />
+        </Campo>
+        <Campo etiqueta="¿Por qué se corrige?" className="sm:col-span-2">
+          <Entrada value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej. Andrea no contó la base; eran $16.000" />
+        </Campo>
+      </div>
+      {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
+    </Modal>
   );
 }
 

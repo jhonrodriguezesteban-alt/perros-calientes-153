@@ -252,6 +252,23 @@ function FormAbrir({
   const [base, setBase] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ultimo, setUltimo] = useState<{ cerrado_en: string; efectivo_contado: number; cerrado_por: string | null } | null>(null);
+
+  // Con cuánto quedó la caja en el último cierre: es con lo que debería arrancar hoy.
+  useEffect(() => {
+    let activo = true;
+    void supabaseNavegador()
+      .rpc("ultimo_cierre_caja")
+      .then(({ data }) => {
+        const u = (data as { cerrado_en: string; efectivo_contado: number; cerrado_por: string | null }[] | null)?.[0];
+        if (activo && u) setUltimo(u);
+      });
+    return () => {
+      activo = false;
+    };
+  }, []);
+  const diferencia = ultimo && base !== null ? base - ultimo.efectivo_contado : null;
+
   const abrir = async () => {
     setGuardando(true);
     const { error } = await supabaseNavegador().rpc("abrir_turno", { p_base_inicial: base ?? 0 });
@@ -276,11 +293,41 @@ function FormAbrir({
           Vas a abrir la caja como socio. Si Andrea va a atender hoy, mejor que la abra ella desde la tablet con la base que recibe.
         </p>
       )}
-      <EntradaDinero etiqueta="¿Con cuánto efectivo arrancas en la caja? (base)" valor={base} alCambiar={setBase} autoFocus />
+      {ultimo && (
+        <div className="mb-5 rounded-2xl bg-cafe p-4 text-crema">
+          <p className="font-etiqueta text-sm font-semibold text-cafe-300">
+            Caja actual según el último cierre ({fechaHora.format(new Date(ultimo.cerrado_en))}
+            {ultimo.cerrado_por ? ` · ${ultimo.cerrado_por}` : ""})
+          </p>
+          <p className="numeros font-titulo text-4xl font-extrabold text-mostaza">{cop(ultimo.efectivo_contado)}</p>
+          <button
+            onClick={() => setBase(ultimo.efectivo_contado)}
+            className="mt-2 rounded-xl bg-crema px-4 py-2 font-etiqueta text-sm font-extrabold text-cafe active:bg-mostaza"
+          >
+            Conté y está completo: usar {cop(ultimo.efectivo_contado)}
+          </button>
+        </div>
+      )}
+      <EntradaDinero etiqueta="Cuenta la caja: ¿con cuánto efectivo arrancas? (base)" valor={base} alCambiar={setBase} autoFocus />
+      {diferencia !== null && diferencia !== 0 && (
+        <p className="mt-3 rounded-2xl bg-mostaza-100 px-4 py-3 text-sm font-semibold ring-2 ring-mostaza">
+          {diferencia < 0 ? `Hay ${cop(-diferencia)} menos` : `Hay ${cop(diferencia)} más`} que en el último cierre. Si sacaron o
+          metieron plata, avísale a los socios.
+        </p>
+      )}
       {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
     </Modal>
   );
 }
+
+const fechaHora = new Intl.DateTimeFormat("es-CO", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "America/Bogota",
+});
 
 function FormRetiro({ alVolver, alListo }: { alVolver: () => void; alListo: (mensaje: string, detalle?: string) => void }) {
   const [monto, setMonto] = useState<number | null>(null);
