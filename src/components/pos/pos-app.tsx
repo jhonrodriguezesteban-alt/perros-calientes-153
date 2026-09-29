@@ -171,8 +171,10 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
     <div className="tactil flex h-dvh flex-col overflow-hidden">
       {/* Encabezado */}
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 bg-cafe px-4 py-3 text-crema sm:px-6">
-        <Logo alto={40} placa />
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+        <div className="flex basis-full justify-center sm:basis-auto">
+          <Logo alto={40} placa />
+        </div>
+        <div className="-mx-1 flex w-full items-center justify-between gap-1 overflow-x-auto px-1 sm:mx-0 sm:ml-auto sm:w-auto sm:justify-end sm:gap-2 sm:overflow-visible sm:px-0">
           <Chip onClick={() => void sincronizar()} tono={enLinea ? "normal" : "alerta"} etiqueta="Conexión">
             {enLinea ? <Wifi className="size-5" /> : <WifiOff className="size-5" />}
             <span className="hidden md:inline">{enLinea ? "En línea" : "Sin internet"}</span>
@@ -456,7 +458,7 @@ function Chip({
     <button
       onClick={onClick}
       aria-label={etiqueta}
-      className={`flex h-12 items-center gap-2 rounded-full px-4 font-etiqueta text-base font-semibold ${
+      className={`flex h-12 shrink-0 items-center gap-1.5 rounded-full px-3 font-etiqueta text-base font-semibold sm:gap-2 sm:px-4 ${
         tono === "alerta" ? "bg-mostaza text-cafe" : "bg-cafe-700 text-crema active:bg-cafe"
       }`}
     >

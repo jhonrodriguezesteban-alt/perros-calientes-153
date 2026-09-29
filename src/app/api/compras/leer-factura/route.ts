@@ -37,6 +37,7 @@ const ESQUEMA = {
         type: "object",
         additionalProperties: false,
         required: [
+          "tipo",
           "descripcion",
           "presentacion",
           "insumo_id",
@@ -49,6 +50,7 @@ const ESQUEMA = {
           "nota",
         ],
         properties: {
+          tipo: { type: "string", enum: ["insumo", "equipo"] },
           descripcion: { type: "string" },
           presentacion: { type: "string" },
           insumo_id: nulo({ type: "integer" }),
@@ -68,6 +70,7 @@ const ESQUEMA = {
 const INSTRUCCIONES = `Eres el asistente de compras de "Bendito Perro Caliente", un puesto de perros calientes en Bogotá (Colombia). Te llegan fotos de facturas o tiquetes de compra (supermercado, mayorista, tienda, plaza) y debes convertirlas en renglones para el inventario.
 
 Para cada producto comprado:
+- tipo: "insumo" si se gasta al vender o preparar (comida, bebidas, salsas, servilletas, bolsas, bandejas, empaques desechables); "equipo" si es un utensilio o equipo que se usa muchas veces y no se gasta (pinzas, ollas, planchas, neveras, termos, cuchillos, recipientes, dispensadores de salsa). Un equipo nunca lleva insumo_id.
 - descripcion: el texto del producto tal como aparece en la factura.
 - presentacion: la presentación con gramaje o contenido y cuántas se compraron, en español sencillo (ej. "2 × paquete de 8 panes", "1 × bolsa 1.000 g", "3 × botella 1,5 L").
 - insumo_id: el id del insumo de la lista que corresponde a ese producto. Empareja por lo que es el producto, no por la marca exacta (ej. "SALCH RANCHERA X16 FRIKO" es la salchicha aunque el nombre del insumo no diga la marca). Si ninguno corresponde, null.
@@ -182,6 +185,7 @@ export async function POST(request: Request) {
   leida.items = (leida.items ?? [])
     .filter((it) => it.cantidad > 0 && it.costo_total >= 0)
     .map((it): ItemLeido => {
+      if (it.tipo === "equipo") return { ...it, insumo_id: null, nombre_sugerido: it.nombre_sugerido ?? it.descripcion };
       const ins = it.insumo_id !== null ? porId.get(it.insumo_id) : undefined;
       if (it.insumo_id !== null && !ins) return { ...it, insumo_id: null, nombre_sugerido: it.nombre_sugerido ?? it.descripcion };
       if (ins && ins.unidad !== it.unidad) {

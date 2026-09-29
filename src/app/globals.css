@@ -19,6 +19,18 @@
   --font-titulo: var(--font-baloo), system-ui, sans-serif;
   --font-etiqueta: var(--font-poppins), system-ui, sans-serif;
   --font-sans: var(--font-nunito), system-ui, sans-serif;
+
+  /* La salchicha salta mientras carga */
+  --animate-salchicha: salchicha 0.9s ease-in-out infinite;
+  --animate-sombra: sombra 0.9s ease-in-out infinite;
+  @keyframes salchicha {
+    0%, 100% { transform: translateY(0) rotate(-6deg) scaleY(0.96); }
+    50% { transform: translateY(-18px) rotate(6deg) scaleY(1.02); }
+  }
+  @keyframes sombra {
+    0%, 100% { transform: scaleX(1); opacity: 0.9; }
+    50% { transform: scaleX(0.6); opacity: 0.4; }
+  }
 }
 
 html,
