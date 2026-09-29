@@ -11,18 +11,22 @@ export function ModalInsumo({
   insumo,
   nombreInicial = "",
   familiaInicial,
+  unidadInicial,
+  costoInicial,
   alCerrar,
   alGuardar,
 }: {
   insumo?: Insumo;
   nombreInicial?: string;
   familiaInicial?: Familia;
+  unidadInicial?: Unidad;
+  costoInicial?: number;
   alCerrar: () => void;
   alGuardar: (insumo: Insumo) => void;
 }) {
   const [nombre, setNombre] = useState(insumo?.nombre ?? nombreInicial);
-  const [unidad, setUnidad] = useState<Unidad>(insumo?.unidad ?? "g");
-  const [costo, setCosto] = useState(insumo ? String(insumo.costo_unitario) : "");
+  const [unidad, setUnidad] = useState<Unidad>(insumo?.unidad ?? unidadInicial ?? "g");
+  const [costo, setCosto] = useState(insumo ? String(insumo.costo_unitario) : costoInicial !== undefined ? String(Math.round(costoInicial * 100) / 100) : "");
   const [minimo, setMinimo] = useState(insumo ? String(insumo.stock_minimo) : "");
   const [nota, setNota] = useState(insumo?.nota ?? "");
   const [estimado, setEstimado] = useState(insumo?.es_estimado ?? false);
