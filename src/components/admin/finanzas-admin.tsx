@@ -2,7 +2,7 @@
 
 import { Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { db, fechaCorta, hoyBogota, mesLargo, type CategoriaGasto, type Gasto, type ResumenMes } from "@/lib/admin";
+import { db, fechaCorta, hoyBogota, mesLargo, PAGOS_COMPRA, type CategoriaGasto, type Gasto, type PagoCompra, type ResumenMes } from "@/lib/admin";
 import { cop } from "@/lib/formato";
 import {
   aNumero,
@@ -430,6 +430,8 @@ function Gastos({
   const [monto, setMonto] = useState<number | null>(null);
   const [descripcion, setDescripcion] = useState("");
   const [socio, setSocio] = useState("");
+  const [pagadoCon, setPagadoCon] = useState<PagoCompra | null>(null);
+  const [pagadoPor, setPagadoPor] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const cat = categorias.find((c) => c.id === categoria);
@@ -442,6 +444,8 @@ function Gastos({
     setError(null);
     if (!categoria) return setError("Elige la categoría.");
     if (!monto) return setError("Escribe el monto.");
+    if (!pagadoCon) return setError("Elige con qué se pagó.");
+    if (pagadoCon === "socio" && !pagadoPor) return setError("Elige qué socio puso la plata.");
     setGuardando(true);
     try {
       exigir(
@@ -451,10 +455,13 @@ function Gastos({
           monto,
           descripcion: descripcion.trim() || null,
           socio_id: esCuota && socio ? socio : null,
+          pagado_con: pagadoCon,
+          pagado_por_socio: pagadoCon === "socio" ? pagadoPor : null,
         }),
       );
       setMonto(null);
       setDescripcion("");
+      setPagadoCon(null);
       alCambiar();
     } catch (e) {
       setError(mensajeError(e));
@@ -518,6 +525,33 @@ function Gastos({
         <Boton onClick={guardar} cargando={guardando}>
           <Plus className="size-5" /> Agregar
         </Boton>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="font-etiqueta text-sm font-semibold text-cafe-700">¿Con qué se pagó?</span>
+        {PAGOS_COMPRA.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPagadoCon(p.id)}
+            className={`min-h-10 rounded-xl px-3 font-etiqueta text-sm font-semibold ${
+              pagadoCon === p.id ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
+            }`}
+          >
+            {p.nombre}
+          </button>
+        ))}
+        {pagadoCon === "socio" && (
+          <Selector value={pagadoPor} onChange={(e) => setPagadoPor(e.target.value)} className="w-auto min-w-48">
+            <option value="">¿Qué socio?</option>
+            {socios.map((so) => (
+              <option key={so.id} value={so.id}>
+                {so.nombre}
+              </option>
+            ))}
+          </Selector>
+        )}
+        {pagadoCon === "caja" && fecha === hoyBogota() && (
+          <span className="text-sm text-cafe-700">Sale de la caja de hoy como retiro.</span>
+        )}
       </div>
       {error && (
         <div className="mb-3">

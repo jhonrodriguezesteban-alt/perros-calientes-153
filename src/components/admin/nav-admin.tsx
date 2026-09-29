@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Store,
   Utensils,
+  Wallet,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -43,6 +44,7 @@ const GRUPOS = [
   {
     titulo: "Dinero",
     enlaces: [
+      { href: "/panel/flujo", nombre: "Flujo de caja", ayuda: "Plata disponible y dónde está", Icono: Wallet },
       { href: "/panel/deudores", nombre: "Deudores", ayuda: "Fiados por cobrar", Icono: HandCoins },
       { href: "/panel/finanzas", nombre: "Finanzas", ayuda: "Gastos y punto de equilibrio", Icono: PiggyBank },
     ],
