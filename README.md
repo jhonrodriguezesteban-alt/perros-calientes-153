@@ -22,6 +22,11 @@ Punto de venta para la tablet del contenedor y panel en tiempo real para los soc
 | `/panel/finanzas` | solo socios | Resultado mes a mes, punto de equilibrio con simulador, gastos, parámetros y plan de recuperación. |
 | `/panel/catalogo` | solo socios | Crear y editar productos y toppings, siempre con receta/porción para conocer costo y margen. |
 
+### Instalar en el celular o la tablet
+Abre la app en el navegador y elige **"Agregar a pantalla de inicio"** (Chrome: menú ⋮ → *Instalar app*;
+iPhone/Safari: botón compartir → *Agregar a inicio*). El ícono es la salchicha; adentro de la app se ve el logo completo.
+Los archivos de marca están en `public/marca/` y los íconos de pestaña en `src/app/icon.png` y `apple-icon.png`.
+
 ### Si se cae el internet
 - Cada venta se guarda **primero en la tablet** y después se envía. Sin conexión queda en cola
   ("1 por enviar" en el encabezado) y se reintenta sola cada 15 s y al volver la red.

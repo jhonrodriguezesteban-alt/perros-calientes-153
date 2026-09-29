@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/logo";
 import { supabaseNavegador } from "@/lib/supabase/client";
 
 const GRUPOS = [
@@ -111,9 +112,9 @@ export function NavAdmin({ nombre, children }: { nombre: string; children: React
         >
           <Menu className="size-7" />
         </button>
-        <p className="whitespace-nowrap font-titulo text-xl font-extrabold leading-none sm:text-2xl">
-          Bendito <span className="text-mostaza">Perro</span> Caliente
-        </p>
+        <Link href="/panel" aria-label="Inicio del panel">
+          <Logo alto={36} placa />
+        </Link>
         {actual && (
           <span className="ml-2 hidden items-center gap-2 rounded-full bg-cafe-700 px-3 py-1 font-etiqueta text-sm font-semibold sm:flex">
             <actual.Icono className="size-4" /> {actual.nombre}
