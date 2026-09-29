@@ -1,8 +1,9 @@
 "use client";
 
-import { Copy, MessageCircle } from "lucide-react";
+import { Copy, Download, ImageIcon, Loader2, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { cop, horaBogota } from "@/lib/formato";
+import { imagenCierre, nombreImagenCierre } from "@/lib/imagen-cierre";
 import type { ResumenDia } from "@/lib/tipos";
 
 const fechaLarga = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Bogota" });
@@ -43,7 +44,36 @@ export function textoCierre(r: ResumenDia) {
 /** Cuadre del día: lo vendido, efectivo y bancos (sistema vs. declarado). */
 export function ResumenCierre({ resumen: r, compartir }: { resumen: ResumenDia; compartir?: boolean }) {
   const [copiado, setCopiado] = useState(false);
+  const [generando, setGenerando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   const texto = textoCierre(r);
+
+  // Comparte el cierre como imagen: en el celular abre el menú de compartir
+  // (WhatsApp, etc.); en el computador descarga la imagen para adjuntarla.
+  const compartirImagen = async () => {
+    setGenerando(true);
+    setAviso(null);
+    try {
+      const blob = await imagenCierre(r);
+      const archivo = new File([blob], nombreImagenCierre(r), { type: "image/png" });
+      if (navigator.canShare?.({ files: [archivo] })) {
+        await navigator.share({ files: [archivo], title: "Cierre de caja" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = archivo.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setAviso("Imagen descargada. Adjúntala en WhatsApp (clip → Galería o Documento).");
+      }
+    } catch (e) {
+      // Cerrar el menú de compartir sin elegir nada no es un error
+      if (!(e instanceof DOMException && e.name === "AbortError")) setAviso("No se pudo crear la imagen. Usa “Enviar como texto”.");
+    } finally {
+      setGenerando(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -95,13 +125,26 @@ export function ResumenCierre({ resumen: r, compartir }: { resumen: ResumenDia; 
 
       {compartir && (
         <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => void compartirImagen()}
+            disabled={generando}
+            className="col-span-2 flex h-16 items-center justify-center gap-2 rounded-2xl bg-rojo font-etiqueta text-lg font-extrabold text-white active:bg-rojo-700 disabled:bg-cafe-300"
+          >
+            {generando ? <Loader2 className="size-5 animate-spin" /> : <ImageIcon className="size-5" />}
+            Compartir imagen por WhatsApp
+          </button>
+          {aviso && (
+            <p className="col-span-2 flex items-center gap-2 rounded-2xl bg-mostaza-100 px-4 py-2 text-sm font-semibold ring-2 ring-mostaza">
+              <Download className="size-4 shrink-0" /> {aviso}
+            </p>
+          )}
           <a
             href={`https://wa.me/?text=${encodeURIComponent(texto)}`}
             target="_blank"
             rel="noreferrer"
             className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-cafe font-etiqueta text-lg font-extrabold text-crema active:bg-cafe-700"
           >
-            <MessageCircle className="size-5" /> Enviar por WhatsApp
+            <MessageCircle className="size-5" /> Enviar como texto
           </a>
           <button
             onClick={() =>
