@@ -40,7 +40,7 @@ export interface Solicitud {
   solicitante: { nombre: string } | null;
 }
 
-export type PagoCompra = "caja" | "efectivo" | "tarjeta" | "transferencia" | "socio";
+export type PagoCompra = "caja" | "efectivo" | "tarjeta" | "transferencia" | "socio" | "fondo";
 
 export const PAGOS_COMPRA: { id: PagoCompra; nombre: string }[] = [
   { id: "caja", nombre: "Efectivo de la caja" },
@@ -48,6 +48,7 @@ export const PAGOS_COMPRA: { id: PagoCompra; nombre: string }[] = [
   { id: "tarjeta", nombre: "Tarjeta" },
   { id: "transferencia", nombre: "Transferencia / Nequi" },
   { id: "socio", nombre: "Lo pagó un socio" },
+  { id: "fondo", nombre: "Fondo de inversión" },
 ];
 
 export interface Compra {
@@ -73,6 +74,7 @@ export interface Gasto {
   descripcion: string | null;
   categorias_gasto: { nombre: string; tipo: CategoriaGasto["tipo"] } | null;
   compras: { id: string }[];
+  pagado_con: PagoCompra | null;
 }
 
 export interface ResumenMes {

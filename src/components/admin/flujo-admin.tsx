@@ -1,13 +1,23 @@
 "use client";
 
-import { Landmark, Smartphone, Store, Wallet } from "lucide-react";
+import { Landmark, PiggyBank, Smartphone, Store, Wallet } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Modal } from "@/components/modal";
 import { db, fechaCorta, hoyBogota, PAGOS_COMPRA } from "@/lib/admin";
 import { cop, horaBogota } from "@/lib/formato";
 import { Boton, Campo, Cargando, Encabezado, Entrada, EntradaPesos, exigir, mensajeError, MensajeError, Subtitulo, Tarjeta, useDatos } from "./ui";
 
+interface MovFondo {
+  id?: string;
+  fecha: string;
+  tipo: "aporte" | "devolucion" | "pago";
+  monto: number;
+  quien: string;
+  nota: string | null;
+}
+
 interface Flujo {
+  fondo: { saldo: number; aportado: number; devuelto: number; pagado: number; movimientos: MovFondo[] };
   caja_local: {
     abierta: boolean;
     desde?: string;
@@ -54,6 +64,17 @@ function rangoDe(r: Rango): [string, string] {
   return [ini, hoy];
 }
 
+async function cargarListas() {
+  const [socios, categorias] = await Promise.all([
+    db().from("perfiles").select("id, nombre").eq("rol", "socio").eq("activo", true).order("nombre"),
+    db().from("categorias_gasto").select("id, nombre, tipo").eq("activo", true).order("nombre"),
+  ]);
+  return {
+    socios: exigir(socios) as { id: string; nombre: string }[],
+    categorias: exigir(categorias) as { id: number; nombre: string; tipo: string }[],
+  };
+}
+
 /** Dónde está la plata hoy y qué entró y salió en un periodo. */
 export function FlujoAdmin() {
   const [rango, setRango] = useState<Rango>("mes");
@@ -61,6 +82,8 @@ export function FlujoAdmin() {
   const cargar = useCallback(async () => exigir(await db().rpc("flujo_caja", { p_desde: desde, p_hasta: hasta })) as Flujo, [desde, hasta]);
   const { data: f, error, cargando, recargar } = useDatos(cargar);
   const [ajustando, setAjustando] = useState<"bold" | "nequi" | null>(null);
+  const listas = useDatos(cargarListas);
+  const [fondoForm, setFondoForm] = useState<"aporte" | "pago" | "interes" | null>(null);
 
   return (
     <div className="space-y-6">
@@ -73,7 +96,7 @@ export function FlujoAdmin() {
           <section className="rounded-3xl bg-cafe p-6 text-crema">
             <p className="font-etiqueta text-sm font-semibold uppercase tracking-wide text-cafe-300">Dinero disponible ahora</p>
             <p className={`numeros font-titulo text-5xl font-extrabold ${f.disponible < 0 ? "text-rojo" : "text-mostaza"}`}>{cop(f.disponible)}</p>
-            <p className="mt-1 text-sm text-cafe-100">Caja del local + Bold + Nequi. El fiado pendiente ({cop(f.fiado_por_cobrar)}) no está incluido.</p>
+            <p className="mt-1 text-sm text-cafe-100">Caja del local + Bold + Nequi + fondo de inversión. El fiado pendiente ({cop(f.fiado_por_cobrar)}) no está incluido.</p>
           </section>
 
           <div className="grid gap-4 lg:grid-cols-3">
@@ -104,6 +127,57 @@ export function FlujoAdmin() {
               <p>Lo recibido por Nequi menos lo pagado por transferencia.</p>
             </Cuenta>
           </div>
+
+          <Tarjeta>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="flex items-center gap-2 font-etiqueta text-sm font-semibold uppercase tracking-wide text-cafe-700">
+                  <PiggyBank className="size-5" /> Fondo de inversión de los socios
+                </p>
+                <p className={`numeros mt-1 font-titulo text-4xl font-extrabold ${f.fondo.saldo < 0 ? "text-rojo" : ""}`}>{cop(f.fondo.saldo)}</p>
+                <p className="text-sm text-cafe-700">
+                  Aportado {cop(f.fondo.aportado)} · pagado con el fondo {cop(f.fondo.pagado)}
+                  {f.fondo.devuelto > 0 && ` · devuelto ${cop(f.fondo.devuelto)}`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Boton onClick={() => setFondoForm("aporte")} className="min-h-10 px-4 text-sm">
+                  Registrar aporte
+                </Boton>
+                <Boton variante="secundario" onClick={() => setFondoForm("pago")} className="min-h-10 px-4 text-sm">
+                  Pago con el fondo
+                </Boton>
+                <Boton variante="suave" onClick={() => setFondoForm("interes")} className="min-h-10 px-4 text-sm">
+                  Interés / costo financiero
+                </Boton>
+              </div>
+            </div>
+            {f.fondo.movimientos.length > 0 && (
+              <ul className="mt-4 divide-y divide-cafe-100">
+                {f.fondo.movimientos.map((m, i) => (
+                  <li key={m.id ?? i} className="flex items-baseline justify-between gap-3 py-2">
+                    <span className="min-w-0">
+                      <span className="font-etiqueta font-semibold">
+                        {m.tipo === "aporte" ? "Aporte" : m.tipo === "devolucion" ? "Devolución" : "Pago"} · {m.quien}
+                      </span>
+                      <span className="text-sm text-cafe-700">
+                        {" "}
+                        · {fechaCorta(m.fecha)}
+                        {m.nota ? ` · ${m.nota}` : ""}
+                      </span>
+                    </span>
+                    <span className={`numeros shrink-0 font-semibold ${m.tipo === "aporte" ? "" : "text-rojo"}`}>
+                      {m.tipo === "aporte" ? "+" : "−"}
+                      {cop(m.monto)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-xs text-cafe-300">
+              Compras y gastos también se pueden marcar como pagados con el fondo desde Compras y Finanzas.
+            </p>
+          </Tarjeta>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Tarjeta>
@@ -152,6 +226,19 @@ export function FlujoAdmin() {
             <Periodo f={f} />
           </Tarjeta>
         </>
+      )}
+
+      {fondoForm && listas.data && (
+        <ModalFondo
+          modo={fondoForm}
+          socios={listas.data.socios}
+          categorias={listas.data.categorias}
+          alCerrar={() => setFondoForm(null)}
+          alGuardar={() => {
+            setFondoForm(null);
+            recargar();
+          }}
+        />
       )}
 
       {ajustando && f && (
@@ -348,6 +435,156 @@ function ModalAjuste({
         </Campo>
       </div>
       {real !== null && <p className="mt-3 text-sm font-semibold">Ajuste: {real - actual >= 0 ? "+" : "−"}{cop(Math.abs(real - actual))}</p>}
+      {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
+    </Modal>
+  );
+}
+
+function ModalFondo({
+  modo,
+  socios,
+  categorias,
+  alCerrar,
+  alGuardar,
+}: {
+  modo: "aporte" | "pago" | "interes";
+  socios: { id: string; nombre: string }[];
+  categorias: { id: number; nombre: string; tipo: string }[];
+  alCerrar: () => void;
+  alGuardar: () => void;
+}) {
+  const catInteres = categorias.find((c) => c.nombre === "Intereses y costos financieros")?.id ?? "";
+  const [tipo, setTipo] = useState<"aporte" | "devolucion">("aporte");
+  const [fecha, setFecha] = useState(hoyBogota());
+  const [monto, setMonto] = useState<number | null>(null);
+  const [socio, setSocio] = useState("");
+  const [categoria, setCategoria] = useState<number | "">(modo === "interes" ? catInteres : "");
+  const [nota, setNota] = useState("");
+  const [base, setBase] = useState<number | null>(null);
+  const [tasa, setTasa] = useState("3");
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (!monto) return setError("Escribe el monto.");
+    setGuardando(true);
+    setError(null);
+    try {
+      if (modo === "aporte") {
+        exigir(
+          await db()
+            .from("aportes_socios")
+            .insert({ socio_id: socio || null, fecha, monto, tipo, descripcion: nota.trim() || null }),
+        );
+      } else {
+        if (!categoria) throw new Error("Elige la categoría del pago.");
+        exigir(
+          await db()
+            .from("gastos")
+            .insert({ fecha, categoria_id: categoria, monto, descripcion: nota.trim() || null, pagado_con: "fondo" }),
+        );
+      }
+      alGuardar();
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const titulo = modo === "aporte" ? "Aporte o devolución del fondo" : modo === "interes" ? "Interés o costo financiero" : "Pago hecho con el fondo";
+
+  return (
+    <Modal
+      abierto
+      alCerrar={alCerrar}
+      titulo={titulo}
+      pie={
+        <Boton onClick={guardar} cargando={guardando} className="w-full">
+          Guardar
+        </Boton>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        {modo === "aporte" && (
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            {(["aporte", "devolucion"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTipo(t)}
+                className={`min-h-11 rounded-xl px-4 font-etiqueta text-sm font-semibold ${
+                  tipo === t ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
+                }`}
+              >
+                {t === "aporte" ? "Entra plata (aporte)" : "Sale plata (devolución a socio)"}
+              </button>
+            ))}
+          </div>
+        )}
+        <Campo etiqueta="Fecha">
+          <Entrada type="date" value={fecha} max={hoyBogota()} onChange={(e) => setFecha(e.target.value)} />
+        </Campo>
+        <Campo etiqueta="Monto">
+          <EntradaPesos valor={monto} alCambiar={setMonto} placeholder="$0" />
+        </Campo>
+        {modo === "aporte" ? (
+          <Campo etiqueta="¿Qué socio?" ayuda="Déjalo vacío si fue un préstamo de un tercero (escríbelo en la nota).">
+            <select value={socio} onChange={(e) => setSocio(e.target.value)} className="h-12 w-full rounded-xl bg-white/70 px-3 ring-2 ring-cafe-100">
+              <option value="">Sin socio / tercero</option>
+              {socios.map((so) => (
+                <option key={so.id} value={so.id}>
+                  {so.nombre}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        ) : (
+          <Campo etiqueta="Categoría">
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value ? Number(e.target.value) : "")}
+              className="h-12 w-full rounded-xl bg-white/70 px-3 ring-2 ring-cafe-100"
+            >
+              <option value="">Elige…</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        )}
+        <Campo etiqueta="Nota">
+          <Entrada
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            placeholder={modo === "aporte" ? "Ej. Inversión inicial" : modo === "interes" ? "Ej. Interés 3% sobre $13.000.000" : "Ej. Contenedor, nevera…"}
+          />
+        </Campo>
+        {modo === "interes" && (
+          <div className="flex flex-wrap items-end gap-2 rounded-2xl bg-crema-200 p-3 sm:col-span-2">
+            <Campo etiqueta="Calcular sobre">
+              <EntradaPesos valor={base} alCambiar={setBase} placeholder="$13.000.000" />
+            </Campo>
+            <Campo etiqueta="Tasa %">
+              <Entrada value={tasa} onChange={(e) => setTasa(e.target.value)} inputMode="decimal" className="w-20" />
+            </Campo>
+            <Boton
+              variante="suave"
+              className="min-h-12"
+              onClick={() => {
+                const t = Number(tasa.replace(",", "."));
+                if (base && t) {
+                  setMonto(Math.round((base * t) / 100));
+                  if (!nota) setNota(`Interés ${tasa}% sobre ${cop(base)}`);
+                }
+              }}
+            >
+              Calcular
+            </Boton>
+          </div>
+        )}
+      </div>
       {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
     </Modal>
   );

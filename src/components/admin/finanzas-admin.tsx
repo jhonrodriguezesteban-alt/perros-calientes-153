@@ -83,7 +83,7 @@ async function cargarFinanzas() {
     db().from("categorias_gasto").select("id, nombre, tipo").eq("activo", true).order("tipo").order("nombre").returns<CategoriaGasto[]>(),
     db()
       .from("gastos")
-      .select("id, fecha, monto, descripcion, categorias_gasto(nombre, tipo), compras!compras_gasto_id_fkey(id)")
+      .select("id, fecha, monto, descripcion, pagado_con, categorias_gasto(nombre, tipo), compras!compras_gasto_id_fkey(id)")
       .gte("fecha", (() => {
         const d = new Date(hoyBogota() + "T12:00:00-05:00");
         d.setMonth(d.getMonth() - 5);
@@ -470,6 +470,16 @@ function Gastos({
     }
   };
 
+  // Cambiar la forma de pago de un gasto ya registrado (ej. se pagó con el fondo)
+  const cambiarPago = async (g: Gasto, pago: PagoCompra) => {
+    try {
+      exigir(await db().from("gastos").update({ pagado_con: pago }).eq("id", g.id));
+      alCambiar();
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  };
+
   const borrar = async (g: Gasto) => {
     if (!confirm(`¿Borrar el gasto de ${cop(g.monto)}?`)) return;
     try {
@@ -578,6 +588,23 @@ function Gastos({
                 {g.compras.length > 0 && <span className="ml-2"><Insignia>De una compra</Insignia></span>}
               </span>
               <span className="flex items-center gap-2">
+                {g.compras.length === 0 && (
+                  <select
+                    aria-label="Con qué se pagó"
+                    value={g.pagado_con ?? ""}
+                    onChange={(e) => void cambiarPago(g, e.target.value as PagoCompra)}
+                    className="h-9 rounded-lg bg-crema px-2 text-xs ring-1 ring-cafe-100"
+                  >
+                    <option value="" disabled>
+                      ¿Con qué se pagó?
+                    </option>
+                    {PAGOS_COMPRA.filter((p) => p.id !== "socio" && p.id !== "caja").map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <span className="numeros font-semibold">{cop(g.monto)}</span>
                 {g.compras.length === 0 && (
                   <button aria-label="Borrar gasto" onClick={() => borrar(g)} className="grid size-10 place-items-center rounded-xl text-cafe-300 active:bg-cafe-100">
