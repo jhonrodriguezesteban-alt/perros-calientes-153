@@ -121,6 +121,16 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
 
   const total = lineas.reduce((s, l) => s + (l.costo_total ?? 0), 0);
 
+  // Corregir con qué se pagó una compra ya registrada
+  const cambiarPago = async (c: Compra, pago: PagoCompra) => {
+    try {
+      exigir(await db().from("compras").update({ pagado_con: pago, socio_id: null }).eq("id", c.id));
+      recargar();
+    } catch (e) {
+      setAviso({ tipo: "error", texto: mensajeError(e) });
+    }
+  };
+
   const cambiarLinea = (clave: number, cambio: Partial<Linea>) =>
     setLineas((ls) => ls.map((l) => (l.clave === clave ? { ...l, ...cambio } : l)));
 
@@ -371,6 +381,27 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                           </p>
                         )}
                       </button>
+                      {abierta === c.id && (
+                        <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-etiqueta font-semibold text-cafe-700">Se pagó con:</span>
+                          <select
+                            value={c.pagado_con ?? ""}
+                            onChange={(e) => void cambiarPago(c, e.target.value as PagoCompra)}
+                            className="h-9 rounded-lg bg-crema px-2 ring-1 ring-cafe-100"
+                          >
+                            <option value="" disabled>
+                              Sin registrar
+                            </option>
+                            {PAGOS_COMPRA.filter((p) => p.id !== "socio" && p.id !== "caja").map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.nombre}
+                              </option>
+                            ))}
+                            {c.pagado_con === "socio" && <option value="socio">Lo pagó {c.socio?.nombre ?? "un socio"}</option>}
+                            {c.pagado_con === "caja" && <option value="caja">Efectivo de la caja</option>}
+                          </select>
+                        </label>
+                      )}
                       {abierta === c.id && (
                         <div className="-mx-2 mt-3 overflow-x-auto">
                           <table className="w-full min-w-[520px] text-sm">
