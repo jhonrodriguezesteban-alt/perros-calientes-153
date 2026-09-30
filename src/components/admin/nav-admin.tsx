@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   Boxes,
   ClipboardList,
   HandCoins,
@@ -50,6 +51,10 @@ const GRUPOS = [
       { href: "/panel/deudores", nombre: "Deudores", ayuda: "Fiados por cobrar", Icono: HandCoins },
       { href: "/panel/finanzas", nombre: "Finanzas", ayuda: "Gastos y punto de equilibrio", Icono: PiggyBank },
     ],
+  },
+  {
+    titulo: "Cuenta",
+    enlaces: [{ href: "/panel/notificaciones", nombre: "Notificaciones", ayuda: "Avisos al celular", Icono: Bell }],
   },
 ];
 
