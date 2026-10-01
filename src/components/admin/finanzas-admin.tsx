@@ -40,6 +40,8 @@ interface PE {
   arriendo: number;
   cuota_recuperacion: number;
   intereses?: number;
+  luz?: number;
+  internet?: number;
   costos_fijos: number;
   pe_unidades_mes: number | null;
   pe_unidades_dia: number | null;
@@ -67,6 +69,8 @@ interface Parametro {
 const PARAMETROS: { clave: string; nombre: string; tipo: "pesos" | "pct" | "num"; ayuda?: string }[] = [
   { clave: "nomina_mensual", nombre: "Nómina mensual", tipo: "pesos", ayuda: "Salario + prestaciones + parafiscales" },
   { clave: "arriendo_mensual", nombre: "Arriendo mensual", tipo: "pesos" },
+  { clave: "servicios_luz_mensual", nombre: "Luz (al mes)", tipo: "pesos" },
+  { clave: "servicios_internet_mensual", nombre: "Internet (al mes)", tipo: "pesos" },
   { clave: "intereses_prestamo_mensual", nombre: "Intereses del préstamo (al mes)", tipo: "pesos", ayuda: "Lo que se paga de intereses cada mes por el préstamo de los socios" },
   { clave: "merma_pct", nombre: "Merma", tipo: "pct", ayuda: "% que se pierde de los insumos" },
   { clave: "comision_datafono_pct", nombre: "Comisión Bold", tipo: "pct" },
@@ -254,6 +258,8 @@ interface Escenario {
   tasaBebida: string;
   nomina: number | null;
   arriendo: number | null;
+  luz: number | null;
+  internet: number | null;
   otrosFijos: number | null;
   intereses: number | null;
   costoBebida: number | null;
@@ -275,6 +281,8 @@ function escenarioDesde(pe: PE, dias: number, prestamo: number, costoBebida: num
     tasaBebida: String(tasa),
     nomina: pe.nomina,
     arriendo: pe.arriendo,
+    luz: pe.luz ?? 0,
+    internet: pe.internet ?? 0,
     otrosFijos: 0,
     intereses: pe.intereses ?? Math.round((prestamo > 0 ? prestamo : 13000000) * 0.03),
     costoBebida,
@@ -296,7 +304,7 @@ function calcular(e: Escenario) {
   const margen = margenPerro + margenBebida;
   const cuota = e.abono ?? 0;
   const intereses = e.intereses ?? 0;
-  const operativos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.otrosFijos ?? 0) + intereses;
+  const operativos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.luz ?? 0) + (e.internet ?? 0) + (e.otrosFijos ?? 0) + intereses;
   const fijos = operativos + cuota;
   const dias = aNumero(e.dias) ?? 30;
   const peMes = margen > 0 ? Math.ceil(fijos / margen) : null;
@@ -458,7 +466,13 @@ function SimuladorPE({
             <CampoSim etiqueta="Arriendo">
               <EntradaPesos valor={escenario.arriendo} alCambiar={(v) => set({ arriendo: v })} />
             </CampoSim>
-            <CampoSim etiqueta="Otros fijos (servicios, gas…)">
+            <CampoSim etiqueta="Luz">
+              <EntradaPesos valor={escenario.luz} alCambiar={(v) => set({ luz: v })} placeholder="$0" />
+            </CampoSim>
+            <CampoSim etiqueta="Internet">
+              <EntradaPesos valor={escenario.internet} alCambiar={(v) => set({ internet: v })} placeholder="$0" />
+            </CampoSim>
+            <CampoSim etiqueta="Otros fijos (gas, agua…)">
               <EntradaPesos valor={escenario.otrosFijos} alCambiar={(v) => set({ otrosFijos: v })} />
             </CampoSim>
             <CampoSim etiqueta="Días de operación al mes">
@@ -474,6 +488,8 @@ function SimuladorPE({
           <dl className="mt-4 space-y-1 border-t border-cafe-300/40 pt-3 text-sm">
             <Linea etiqueta="Nómina" valor={cop(escenario.nomina ?? 0)} />
             <Linea etiqueta="Arriendo" valor={cop(escenario.arriendo ?? 0)} />
+            <Linea etiqueta="Luz" valor={cop(escenario.luz ?? 0)} />
+            <Linea etiqueta="Internet" valor={cop(escenario.internet ?? 0)} />
             {(escenario.otrosFijos ?? 0) > 0 && <Linea etiqueta="Otros fijos" valor={cop(escenario.otrosFijos ?? 0)} />}
             {r.intereses > 0 && (
               <Linea
