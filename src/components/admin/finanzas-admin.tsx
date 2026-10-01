@@ -39,6 +39,7 @@ interface PE {
   nomina: number;
   arriendo: number;
   cuota_recuperacion: number;
+  intereses?: number;
   costos_fijos: number;
   pe_unidades_mes: number | null;
   pe_unidades_dia: number | null;
@@ -66,6 +67,7 @@ interface Parametro {
 const PARAMETROS: { clave: string; nombre: string; tipo: "pesos" | "pct" | "num"; ayuda?: string }[] = [
   { clave: "nomina_mensual", nombre: "Nómina mensual", tipo: "pesos", ayuda: "Salario + prestaciones + parafiscales" },
   { clave: "arriendo_mensual", nombre: "Arriendo mensual", tipo: "pesos" },
+  { clave: "intereses_prestamo_mensual", nombre: "Intereses del préstamo (al mes)", tipo: "pesos", ayuda: "Lo que se paga de intereses cada mes por el préstamo de los socios" },
   { clave: "merma_pct", nombre: "Merma", tipo: "pct", ayuda: "% que se pierde de los insumos" },
   { clave: "comision_datafono_pct", nombre: "Comisión Bold", tipo: "pct" },
   { clave: "dias_operacion_mes", nombre: "Días de operación al mes", tipo: "num" },
@@ -155,7 +157,7 @@ export function FinanzasAdmin() {
             <Kpi etiqueta="Flujo de caja" valor={resumenMes.flujo_caja} nota="Lo que entró − todo lo que salió" />
           </div>
 
-          <SimuladorPE pe={pe.data} cargando={pe.cargando} dias={data.parametros.get("dias_operacion_mes")?.valor ?? 30} mes={mes} planes={data.planes} prestamo={data.prestamo} costoBebida={data.costoBebida} />
+          <SimuladorPE pe={pe.data} cargando={pe.cargando} dias={data.parametros.get("dias_operacion_mes")?.valor ?? 30} mes={mes} prestamo={data.prestamo} costoBebida={data.costoBebida} />
 
           <Tarjeta>
             <Subtitulo>Mes a mes</Subtitulo>
@@ -253,19 +255,16 @@ interface Escenario {
   nomina: number | null;
   arriendo: number | null;
   otrosFijos: number | null;
-  prestamo: number | null;
-  interes: string;
+  intereses: number | null;
   costoBebida: number | null;
-  inversion: number | null;
-  meses: string;
+  /** Abono a capital del préstamo al mes (opcional). */
+  abono: number | null;
   dias: string;
   perrosDia: string;
 }
 
-function escenarioDesde(pe: PE, dias: number, planes: Plan[], prestamo: number, costoBebida: number): Escenario {
+function escenarioDesde(pe: PE, dias: number, prestamo: number, costoBebida: number): Escenario {
   const tasa = pe.tasa_adjuncion;
-  const inversion = planes.reduce((s, p) => s + p.monto_total, 0);
-  const meses = planes[0]?.meses ?? 6;
   const e: Escenario = {
     precio: pe.precio_perro,
     insumos: String(pe.insumos_por_perro),
@@ -277,11 +276,9 @@ function escenarioDesde(pe: PE, dias: number, planes: Plan[], prestamo: number, 
     nomina: pe.nomina,
     arriendo: pe.arriendo,
     otrosFijos: 0,
-    prestamo: prestamo > 0 ? prestamo : 13000000,
-    interes: "3",
+    intereses: pe.intereses ?? Math.round((prestamo > 0 ? prestamo : 13000000) * 0.03),
     costoBebida,
-    inversion: inversion > 0 ? inversion : pe.cuota_recuperacion * meses,
-    meses: String(meses),
+    abono: pe.cuota_recuperacion,
     dias: String(dias),
     perrosDia: "0",
   };
@@ -297,9 +294,8 @@ function calcular(e: Escenario) {
   const margenPerro = precio - costoPerro;
   const margenBebida = (e.margenBebida ?? 0) * Math.min((aNumero(e.tasaBebida) ?? 0) / 100, 1);
   const margen = margenPerro + margenBebida;
-  const meses = aNumero(e.meses) ?? 0;
-  const cuota = meses > 0 ? Math.round((e.inversion ?? 0) / meses) : 0;
-  const intereses = Math.round((e.prestamo ?? 0) * ((aNumero(e.interes) ?? 0) / 100));
+  const cuota = e.abono ?? 0;
+  const intereses = e.intereses ?? 0;
   const operativos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.otrosFijos ?? 0) + intereses;
   const fijos = operativos + cuota;
   const dias = aNumero(e.dias) ?? 30;
@@ -339,7 +335,6 @@ function SimuladorPE({
   cargando,
   dias,
   mes,
-  planes,
   prestamo,
   costoBebida,
 }: {
@@ -347,7 +342,6 @@ function SimuladorPE({
   cargando: boolean;
   dias: number;
   mes: string;
-  planes: Plan[];
   prestamo: number;
   costoBebida: number;
 }) {
@@ -355,10 +349,10 @@ function SimuladorPE({
   const [base, setBase] = useState<PE | undefined>(undefined);
   if (pe && pe !== base) {
     setBase(pe);
-    setEscenario(escenarioDesde(pe, dias, planes, prestamo, costoBebida));
+    setEscenario(escenarioDesde(pe, dias, prestamo, costoBebida));
   }
   const r = useMemo(() => (escenario ? calcular(escenario) : null), [escenario]);
-  const real = useMemo(() => (pe ? calcular(escenarioDesde(pe, dias, planes, prestamo, costoBebida)) : null), [pe, dias, planes, prestamo, costoBebida]);
+  const real = useMemo(() => (pe ? calcular(escenarioDesde(pe, dias, prestamo, costoBebida)) : null), [pe, dias, prestamo, costoBebida]);
   const cambiado = r && real && (r.peDia !== real.peDia || Math.round(r.margen) !== Math.round(real.margen) || r.fijos !== real.fijos);
 
   if (cargando && !pe) return <Cargando />;
@@ -379,16 +373,18 @@ function SimuladorPE({
               {r.peMes ?? "—"} al mes · {r.pePesos !== null ? cop(r.pePesos) : "—"} en ventas
             </span>
           </p>
-          <p className="mt-1 text-sm text-cafe-100">
-            Sin contar la recuperación de la inversión (pero sí los intereses): <strong className="text-crema">{r.peDiaSinCuota ?? "—"} perros al día</strong>
-          </p>
+          {r.cuota > 0 && (
+            <p className="mt-1 text-sm text-cafe-100">
+              Sin contar el abono a capital (pero sí los intereses): <strong className="text-crema">{r.peDiaSinCuota ?? "—"} perros al día</strong>
+            </p>
+          )}
           {cambiado && <p className="mt-1 font-etiqueta text-sm font-semibold text-mostaza">Simulación: con los datos reales son {real?.peDia} perros/día.</p>}
         </div>
         <div className="flex gap-2">
           {pe.fuente !== "ventas_reales" && <Insignia tono="alerta">Con estimados: aún no hay ventas este mes</Insignia>}
           {cambiado && (
             <button
-              onClick={() => setEscenario(escenarioDesde(pe, dias, planes, prestamo, costoBebida))}
+              onClick={() => setEscenario(escenarioDesde(pe, dias, prestamo, costoBebida))}
               className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 font-etiqueta text-sm font-semibold ring-2 ring-cafe-300"
             >
               <RotateCcw className="size-4" /> Volver a lo real
@@ -468,17 +464,11 @@ function SimuladorPE({
             <CampoSim etiqueta="Días de operación al mes">
               <EntradaNumero valor={escenario.dias} alCambiar={(v) => set({ dias: v })} />
             </CampoSim>
-            <CampoSim etiqueta="Préstamo de los socios">
-              <EntradaPesos valor={escenario.prestamo} alCambiar={(v) => set({ prestamo: v })} />
+            <CampoSim etiqueta="Intereses del préstamo (al mes)">
+              <EntradaPesos valor={escenario.intereses} alCambiar={(v) => set({ intereses: v })} />
             </CampoSim>
-            <CampoSim etiqueta="Interés % mensual">
-              <EntradaNumero valor={escenario.interes} alCambiar={(v) => set({ interes: v })} />
-            </CampoSim>
-            <CampoSim etiqueta="Inversión a recuperar">
-              <EntradaPesos valor={escenario.inversion} alCambiar={(v) => set({ inversion: v })} />
-            </CampoSim>
-            <CampoSim etiqueta="En cuántos meses">
-              <EntradaNumero valor={escenario.meses} alCambiar={(v) => set({ meses: v })} />
+            <CampoSim etiqueta="Abono a capital del préstamo (al mes)">
+              <EntradaPesos valor={escenario.abono} alCambiar={(v) => set({ abono: v })} placeholder="$0" />
             </CampoSim>
           </div>
           <dl className="mt-4 space-y-1 border-t border-cafe-300/40 pt-3 text-sm">
@@ -486,20 +476,15 @@ function SimuladorPE({
             <Linea etiqueta="Arriendo" valor={cop(escenario.arriendo ?? 0)} />
             {(escenario.otrosFijos ?? 0) > 0 && <Linea etiqueta="Otros fijos" valor={cop(escenario.otrosFijos ?? 0)} />}
             {r.intereses > 0 && (
-              <Linea etiqueta={`Intereses (${cop(escenario.prestamo ?? 0)} × ${escenario.interes || 0}%)`} valor={cop(r.intereses)} />
+              <Linea
+                etiqueta={`Intereses del préstamo${prestamo > 0 ? ` (${((r.intereses / prestamo) * 100).toFixed(1).replace(".0", "")}% de ${cop(prestamo)})` : ""}`}
+                valor={cop(r.intereses)}
+              />
             )}
             <Linea etiqueta="= Gastos del negocio" valor={cop(r.operativos)} />
-            <Linea
-              etiqueta={`+ Recuperar inversión (${cop(escenario.inversion ?? 0)} ÷ ${escenario.meses || 0} meses)`}
-              valor={cop(r.cuota)}
-            />
+            {r.cuota > 0 && <Linea etiqueta="+ Abono a capital del préstamo" valor={cop(r.cuota)} />}
             <Linea etiqueta="= Total a cubrir al mes" valor={cop(r.fijos)} fuerte />
           </dl>
-          {planes.length > 0 && (
-            <p className="mt-3 text-xs text-cafe-100">
-              Inversión del plan: {planes.flatMap((p) => p.plan_recuperacion_items).map((i) => `${i.concepto} ${cop(i.monto)}`).join(" · ")}
-            </p>
-          )}
         </section>
       </div>
 
@@ -527,8 +512,8 @@ function SimuladorPE({
           <LineaClara etiqueta={`Perros al mes (${escenario.dias || 0} días)`} valor={r.perrosMes.toLocaleString("es-CO")} />
           <LineaClara etiqueta="Ganancia de esos perros (con bebidas)" valor={cop(r.margenEscenario)} />
           <LineaClara etiqueta="− Gastos del negocio" valor={`−${cop(r.operativos)}`} />
-          <LineaClara etiqueta="= Queda antes de recuperar inversión" valor={cop(r.utilidadSinCuota)} />
-          <LineaClara etiqueta="− Cuota de recuperación" valor={`−${cop(r.cuota)}`} />
+          {r.cuota > 0 && <LineaClara etiqueta="= Queda antes del abono a capital" valor={cop(r.utilidadSinCuota)} />}
+          {r.cuota > 0 && <LineaClara etiqueta="− Abono a capital del préstamo" valor={`−${cop(r.cuota)}`} />}
           <LineaClara etiqueta={r.utilidadEscenario >= 0 ? "= Utilidad del mes" : "= Pérdida del mes"} valor={cop(r.utilidadEscenario)} fuerte negativo={r.utilidadEscenario < 0} />
         </dl>
 
