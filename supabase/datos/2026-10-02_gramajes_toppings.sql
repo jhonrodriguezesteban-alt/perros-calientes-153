@@ -6,9 +6,16 @@
 --   cebolla crispy 5 g · salsa de huevo 22 g · papa ripio 8 g
 --   papa de pollo (hojuela) 11 g · queso Saravena 8 g
 --   salsas: piña 6 g, BBQ 4 g, mostaza 3 g, tártara 3 g; las demás ~5 g
--- Pendiente de confirmar (es_estimado): queso doble crema (igual que el
--- Saravena), composición de la salsa de huevo (rosada + huevo + cebolla),
--- sweet relish.
+-- Ajustes:
+--   * Cebolla: los 36 g incluyen el agua donde se remoja; seca se estima en
+--     25 g (una cebolla picada ≈ 150 g → ~6 perros).
+--   * Salsa de huevo por tanda: 8 huevos duros (~400 g) + 1 cebolla (~150 g)
+--     + salsa rosada (~600 g, estimado) ≈ 1.150 g. En 22 g por perro van
+--     ~0,15 huevo + ~3 g de cebolla + ~12 g de salsa rosada.
+--   * Queso doble crema desmoronado: 8 g, igual que el Saravena.
+--   * Pico de gallo (tomate, cebolla, limón, vinagre y sal): sin medir, como
+--     la cebolla ≈ 25 g → tomate 15 g + cebolla 8 g + 0,1 limón.
+-- Estimados (es_estimado): cebolla, salsa de huevo, pico de gallo, relish.
 --
 -- Todos quedan como toppings del Perro básico SIN costo extra, para que en
 -- el POS se marque lo que la persona pidió y el consumo sea real. Los que
@@ -17,6 +24,12 @@
 -- Se puede correr más de una vez.
 -- =====================================================================
 begin;
+
+-- Insumos del pico de gallo (costo estimado hasta la primera compra)
+insert into insumos (nombre, unidad, costo_unitario, stock_minimo, es_estimado, nota, familia) values
+  ('Tomate', 'g',   5, 500, true, 'Estimado ~$5.000 el kilo: confirmar con la compra', 'perro'),
+  ('Limón',  'und', 400, 10, true, 'Estimado: confirmar con la compra', 'perro')
+on conflict (nombre) do nothing;
 
 create or replace function pg_temp.topping(p_nombre text, p_orden int, p_insumos jsonb, p_estimado boolean default false)
 returns void language plpgsql as $$
@@ -52,11 +65,11 @@ select pg_temp.topping('Pepinillo',         3, '[{"insumo":"Pepinillo","g":12}]'
 select pg_temp.topping('Salsa de huevo',    4, '[{"insumo":"Salsa rosada","g":12},{"insumo":"Huevo","g":0.15},{"insumo":"Cebolla cabezona","g":3}]', true);
 select pg_temp.topping('Papa ripio',        5, '[{"insumo":"Papa ripio","g":8}]');
 select pg_temp.topping('Papa hojuela',      6, '[{"insumo":"Papa hojuela","g":11}]');
-select pg_temp.topping('Queso doble crema', 7, '[{"insumo":"Queso doble crema","g":8}]', true);
+select pg_temp.topping('Queso doble crema', 7, '[{"insumo":"Queso doble crema","g":8}]');
 select pg_temp.topping('Queso Saravena',    8, '[{"insumo":"Queso Saravena","g":8}]');
 
 -- Nuevos sin costo extra
-select pg_temp.topping('Cebolla',           9, '[{"insumo":"Cebolla cabezona","g":36}]');
+select pg_temp.topping('Cebolla',           9, '[{"insumo":"Cebolla cabezona","g":25}]', true);
 select pg_temp.topping('Piña',             10, '[{"insumo":"Piña en almíbar","g":24}]');
 select pg_temp.topping('Cebolla crispy',   11, '[{"insumo":"Cebolla frita","g":5}]');
 select pg_temp.topping('Jalapeños',        12, '[{"insumo":"Jalapeños","g":12}]');
@@ -67,6 +80,7 @@ select pg_temp.topping('Salsa de tomate',  16, '[{"insumo":"Salsa de tomate","g"
 select pg_temp.topping('Mayonesa',         17, '[{"insumo":"Mayonesa","g":5}]');
 select pg_temp.topping('Mayonesa de ajo',  18, '[{"insumo":"Mayonesa de ajo","g":5}]');
 select pg_temp.topping('Sweet relish',     19, '[{"insumo":"Sweet relish","g":5}]', true);
+select pg_temp.topping('Pico de gallo',    20, '[{"insumo":"Tomate","g":15},{"insumo":"Cebolla cabezona","g":8},{"insumo":"Limón","g":0.1}]', true);
 
 commit;
 
