@@ -39,7 +39,7 @@ interface Linea {
 }
 
 const SELECT_COMPRA =
-  "id, fecha, proveedor, gasto_id, pagado_con, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(cantidad, costo_total, insumos(nombre, unidad)), equipos:gastos!gastos_compra_id_fkey(monto, descripcion)";
+  "id, fecha, proveedor, gasto_id, pagado_con, monto_socio, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(cantidad, costo_total, insumos(nombre, unidad)), equipos:gastos!gastos_compra_id_fkey(monto, descripcion)";
 
 async function cargarCompras() {
   const [insumos, compras, solicitudes, socios, prestadas] = await Promise.all([
@@ -58,7 +58,7 @@ async function cargarCompras() {
       .order("creado_en")
       .returns<Solicitud[]>(),
     db().from("perfiles").select("id, nombre").eq("rol", "socio").eq("activo", true).order("nombre"),
-    db().from("compras").select(SELECT_COMPRA).eq("pagado_con", "socio").returns<Compra[]>(),
+    db().from("compras").select(SELECT_COMPRA).or("pagado_con.eq.socio,monto_socio.not.is.null").returns<Compra[]>(),
   ]);
   return {
     insumos: exigir(insumos),
@@ -170,7 +170,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
   // Corregir con qué se pagó una compra ya registrada
   const cambiarPago = async (c: Compra, pago: PagoCompra) => {
     try {
-      exigir(await db().from("compras").update({ pagado_con: pago, socio_id: null }).eq("id", c.id));
+      exigir(await db().from("compras").update(c.monto_socio ? { pagado_con: pago } : { pagado_con: pago, socio_id: null }).eq("id", c.id));
       recargar();
     } catch (e) {
       setAviso({ tipo: "error", texto: mensajeError(e) });
@@ -506,6 +506,9 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                           </select>
                         </label>
                       )}
+                      {abierta === c.id && c.pagado_con !== "socio" && (
+                        <ParteSocio compra={c} total={totalDe(c)} socios={data.socios} alGuardar={recargar} alError={(t) => setAviso({ tipo: "error", texto: t })} />
+                      )}
                       {abierta === c.id && (
                         <div className="-mx-2 mt-3 overflow-x-auto">
                           <table className="w-full min-w-[520px] text-sm">
@@ -573,16 +576,94 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
 function textoPago(c: Compra) {
   if (!c.pagado_con) return "pago sin registrar";
   if (c.pagado_con === "socio") return `lo pagó ${c.socio?.nombre ?? "un socio"}`;
-  return PAGOS_COMPRA.find((p) => p.id === c.pagado_con)?.nombre.toLowerCase() ?? c.pagado_con;
+  const medio = PAGOS_COMPRA.find((p) => p.id === c.pagado_con)?.nombre.toLowerCase() ?? c.pagado_con;
+  return c.monto_socio ? `${medio} + ${c.socio?.nombre ?? "un socio"} puso ${cop(c.monto_socio)}` : medio;
 }
 
 function agruparPorSocio(compras: Compra[]) {
   const m = new Map<string, number>();
   for (const c of compras) {
     const n = c.socio?.nombre ?? "Socio";
-    m.set(n, (m.get(n) ?? 0) + totalDe(c));
+    m.set(n, (m.get(n) ?? 0) + (c.pagado_con === "socio" ? totalDe(c) : (c.monto_socio ?? 0)));
   }
   return m;
+}
+
+/** Un socio puso solo una parte de la compra: el resto salió del medio de pago. */
+function ParteSocio({
+  compra,
+  total,
+  socios,
+  alGuardar,
+  alError,
+}: {
+  compra: Compra;
+  total: number;
+  socios: { id: string; nombre: string }[];
+  alGuardar: () => void;
+  alError: (t: string) => void;
+}) {
+  const actual = socios.find((s) => s.nombre === compra.socio?.nombre)?.id ?? "";
+  const [abierto, setAbierto] = useState(!!compra.monto_socio);
+  const [socioId, setSocioId] = useState(actual);
+  const [monto, setMonto] = useState<number | null>(compra.monto_socio);
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async (quitar = false) => {
+    if (!quitar) {
+      if (!socioId) return alError("Elige qué socio puso la plata.");
+      if (!monto || monto <= 0 || monto >= total) return alError(`La parte del socio debe ser mayor a $0 y menor que el total (${cop(total)}).`);
+    }
+    setGuardando(true);
+    try {
+      exigir(
+        await db()
+          .from("compras")
+          .update(quitar ? { monto_socio: null, socio_id: null } : { monto_socio: monto, socio_id: socioId })
+          .eq("id", compra.id),
+      );
+      if (quitar) {
+        setMonto(null);
+        setAbierto(false);
+      }
+      alGuardar();
+    } catch (e) {
+      alError(mensajeError(e));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (!abierto) {
+    return (
+      <button onClick={() => setAbierto(true)} className="mt-2 text-sm font-semibold text-cafe-700 underline underline-offset-2">
+        ¿Un socio puso una parte de esta compra?
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-crema-200/60 p-3 text-sm">
+      <span className="font-etiqueta font-semibold text-cafe-700">Un socio puso</span>
+      <EntradaPesos valor={monto} alCambiar={setMonto} placeholder="$0" className="!h-9 !w-36" />
+      <Selector value={socioId} onChange={(e) => setSocioId(e.target.value)} className="!h-9 w-auto min-w-40">
+        <option value="">¿Quién?</option>
+        {socios.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.nombre}
+          </option>
+        ))}
+      </Selector>
+      {monto && monto < total ? <span className="text-cafe-700">· el resto, {cop(total - monto)}, salió del medio de pago</span> : null}
+      <Boton variante="secundario" className="!min-h-9 px-3 text-sm" onClick={() => void guardar()} cargando={guardando}>
+        Guardar
+      </Boton>
+      {compra.monto_socio && (
+        <button onClick={() => void guardar(true)} className="text-sm font-semibold text-rojo">
+          Quitar
+        </button>
+      )}
+    </div>
+  );
 }
 
 function propsInsumoNuevo(l: Linea | undefined) {
