@@ -95,6 +95,13 @@ async function cargarFinanzas() {
     db().from("parametros").select("clave, valor, vigente_desde").order("vigente_desde", { ascending: false }).returns<Parametro[]>(),
     db().from("perfiles").select("id, nombre").eq("rol", "socio").eq("activo", true).returns<{ id: string; nombre: string }[]>(),
   ]);
+  // Para el simulador: el préstamo de los socios y lo que cuesta cada bebida
+  const [aportes, bebidas] = await Promise.all([
+    db().from("aportes_socios").select("monto, tipo"),
+    db().from("insumos").select("costo_unitario").eq("familia", "bebidas").eq("activo", true),
+  ]);
+  const prestamo = (aportes.data ?? []).reduce((s, a) => s + (a.tipo === "devolucion" ? -a.monto : a.monto), 0);
+  const costosBebida = (bebidas.data ?? []).map((b) => Number(b.costo_unitario)).filter((c) => c > 0);
   const vigentes = new Map<string, Parametro>();
   for (const p of exigir(parametros)) if (!vigentes.has(p.clave) && p.vigente_desde <= hoyBogota()) vigentes.set(p.clave, p);
   return {
@@ -104,6 +111,8 @@ async function cargarFinanzas() {
     planes: exigir(planes),
     parametros: vigentes,
     socios: exigir(socios),
+    prestamo,
+    costoBebida: costosBebida.length ? Math.round(costosBebida.reduce((s, c) => s + c, 0) / costosBebida.length) : 1200,
   };
 }
 
@@ -146,7 +155,7 @@ export function FinanzasAdmin() {
             <Kpi etiqueta="Flujo de caja" valor={resumenMes.flujo_caja} nota="Lo que entró − todo lo que salió" />
           </div>
 
-          <SimuladorPE pe={pe.data} cargando={pe.cargando} dias={data.parametros.get("dias_operacion_mes")?.valor ?? 30} mes={mes} planes={data.planes} />
+          <SimuladorPE pe={pe.data} cargando={pe.cargando} dias={data.parametros.get("dias_operacion_mes")?.valor ?? 30} mes={mes} planes={data.planes} prestamo={data.prestamo} costoBebida={data.costoBebida} />
 
           <Tarjeta>
             <Subtitulo>Mes a mes</Subtitulo>
@@ -244,13 +253,16 @@ interface Escenario {
   nomina: number | null;
   arriendo: number | null;
   otrosFijos: number | null;
+  prestamo: number | null;
+  interes: string;
+  costoBebida: number | null;
   inversion: number | null;
   meses: string;
   dias: string;
   perrosDia: string;
 }
 
-function escenarioDesde(pe: PE, dias: number, planes: Plan[]): Escenario {
+function escenarioDesde(pe: PE, dias: number, planes: Plan[], prestamo: number, costoBebida: number): Escenario {
   const tasa = pe.tasa_adjuncion;
   const inversion = planes.reduce((s, p) => s + p.monto_total, 0);
   const meses = planes[0]?.meses ?? 6;
@@ -265,6 +277,9 @@ function escenarioDesde(pe: PE, dias: number, planes: Plan[]): Escenario {
     nomina: pe.nomina,
     arriendo: pe.arriendo,
     otrosFijos: 0,
+    prestamo: prestamo > 0 ? prestamo : 13000000,
+    interes: "3",
+    costoBebida,
     inversion: inversion > 0 ? inversion : pe.cuota_recuperacion * meses,
     meses: String(meses),
     dias: String(dias),
@@ -284,7 +299,8 @@ function calcular(e: Escenario) {
   const margen = margenPerro + margenBebida;
   const meses = aNumero(e.meses) ?? 0;
   const cuota = meses > 0 ? Math.round((e.inversion ?? 0) / meses) : 0;
-  const operativos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.otrosFijos ?? 0);
+  const intereses = Math.round((e.prestamo ?? 0) * ((aNumero(e.interes) ?? 0) / 100));
+  const operativos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.otrosFijos ?? 0) + intereses;
   const fijos = operativos + cuota;
   const dias = aNumero(e.dias) ?? 30;
   const peMes = margen > 0 ? Math.ceil(fijos / margen) : null;
@@ -310,18 +326,39 @@ function calcular(e: Escenario) {
     margenEscenario,
     utilidadEscenario: margenEscenario - fijos,
     utilidadSinCuota: margenEscenario - operativos,
+    intereses,
+    // Plata para surtir el almacén con esas ventas
+    surtidoPerros: perrosMes * insumosConMerma,
+    bebidasMes: Math.round(perrosMes * Math.min((aNumero(e.tasaBebida) ?? 0) / 100, 1)),
+    surtidoBebidas: Math.round(perrosMes * Math.min((aNumero(e.tasaBebida) ?? 0) / 100, 1)) * (e.costoBebida ?? 0),
   };
 }
 
-function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: boolean; dias: number; mes: string; planes: Plan[] }) {
+function SimuladorPE({
+  pe,
+  cargando,
+  dias,
+  mes,
+  planes,
+  prestamo,
+  costoBebida,
+}: {
+  pe?: PE;
+  cargando: boolean;
+  dias: number;
+  mes: string;
+  planes: Plan[];
+  prestamo: number;
+  costoBebida: number;
+}) {
   const [escenario, setEscenario] = useState<Escenario | null>(null);
   const [base, setBase] = useState<PE | undefined>(undefined);
   if (pe && pe !== base) {
     setBase(pe);
-    setEscenario(escenarioDesde(pe, dias, planes));
+    setEscenario(escenarioDesde(pe, dias, planes, prestamo, costoBebida));
   }
   const r = useMemo(() => (escenario ? calcular(escenario) : null), [escenario]);
-  const real = useMemo(() => (pe ? calcular(escenarioDesde(pe, dias, planes)) : null), [pe, dias, planes]);
+  const real = useMemo(() => (pe ? calcular(escenarioDesde(pe, dias, planes, prestamo, costoBebida)) : null), [pe, dias, planes, prestamo, costoBebida]);
   const cambiado = r && real && (r.peDia !== real.peDia || Math.round(r.margen) !== Math.round(real.margen) || r.fijos !== real.fijos);
 
   if (cargando && !pe) return <Cargando />;
@@ -343,7 +380,7 @@ function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: b
             </span>
           </p>
           <p className="mt-1 text-sm text-cafe-100">
-            Sin contar la recuperación de la inversión: <strong className="text-crema">{r.peDiaSinCuota ?? "—"} perros al día</strong>
+            Sin contar la recuperación de la inversión (pero sí los intereses): <strong className="text-crema">{r.peDiaSinCuota ?? "—"} perros al día</strong>
           </p>
           {cambiado && <p className="mt-1 font-etiqueta text-sm font-semibold text-mostaza">Simulación: con los datos reales son {real?.peDia} perros/día.</p>}
         </div>
@@ -351,7 +388,7 @@ function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: b
           {pe.fuente !== "ventas_reales" && <Insignia tono="alerta">Con estimados: aún no hay ventas este mes</Insignia>}
           {cambiado && (
             <button
-              onClick={() => setEscenario(escenarioDesde(pe, dias, planes))}
+              onClick={() => setEscenario(escenarioDesde(pe, dias, planes, prestamo, costoBebida))}
               className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 font-etiqueta text-sm font-semibold ring-2 ring-cafe-300"
             >
               <RotateCcw className="size-4" /> Volver a lo real
@@ -401,6 +438,9 @@ function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: b
             <CampoSim etiqueta="% ventas con bebida">
               <EntradaNumero valor={escenario.tasaBebida} alCambiar={(v) => set({ tasaBebida: v })} />
             </CampoSim>
+            <CampoSim etiqueta="Costo de cada bebida">
+              <EntradaPesos valor={escenario.costoBebida} alCambiar={(v) => set({ costoBebida: v })} />
+            </CampoSim>
           </div>
           <dl className="mt-4 space-y-1 border-t border-cafe-300/40 pt-3 text-sm">
             <Linea etiqueta="Precio del perro" valor={cop(escenario.precio ?? 0)} />
@@ -428,6 +468,12 @@ function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: b
             <CampoSim etiqueta="Días de operación al mes">
               <EntradaNumero valor={escenario.dias} alCambiar={(v) => set({ dias: v })} />
             </CampoSim>
+            <CampoSim etiqueta="Préstamo de los socios">
+              <EntradaPesos valor={escenario.prestamo} alCambiar={(v) => set({ prestamo: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Interés % mensual">
+              <EntradaNumero valor={escenario.interes} alCambiar={(v) => set({ interes: v })} />
+            </CampoSim>
             <CampoSim etiqueta="Inversión a recuperar">
               <EntradaPesos valor={escenario.inversion} alCambiar={(v) => set({ inversion: v })} />
             </CampoSim>
@@ -439,6 +485,9 @@ function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: b
             <Linea etiqueta="Nómina" valor={cop(escenario.nomina ?? 0)} />
             <Linea etiqueta="Arriendo" valor={cop(escenario.arriendo ?? 0)} />
             {(escenario.otrosFijos ?? 0) > 0 && <Linea etiqueta="Otros fijos" valor={cop(escenario.otrosFijos ?? 0)} />}
+            {r.intereses > 0 && (
+              <Linea etiqueta={`Intereses (${cop(escenario.prestamo ?? 0)} × ${escenario.interes || 0}%)`} valor={cop(r.intereses)} />
+            )}
             <Linea etiqueta="= Gastos del negocio" valor={cop(r.operativos)} />
             <Linea
               etiqueta={`+ Recuperar inversión (${cop(escenario.inversion ?? 0)} ÷ ${escenario.meses || 0} meses)`}
@@ -482,6 +531,19 @@ function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: b
           <LineaClara etiqueta="− Cuota de recuperación" valor={`−${cop(r.cuota)}`} />
           <LineaClara etiqueta={r.utilidadEscenario >= 0 ? "= Utilidad del mes" : "= Pérdida del mes"} valor={cop(r.utilidadEscenario)} fuerte negativo={r.utilidadEscenario < 0} />
         </dl>
+
+        <div className="mt-4 border-t-2 border-cafe-100 pt-3">
+          <h4 className="font-etiqueta text-sm font-extrabold uppercase tracking-wide text-cafe-700">Plata para surtir el almacén ese mes</h4>
+          <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+            <LineaClara etiqueta={`Materia prima para ${r.perrosMes.toLocaleString("es-CO")} perros`} valor={cop(r.surtidoPerros)} />
+            <LineaClara etiqueta={`${r.bebidasMes.toLocaleString("es-CO")} bebidas × ${cop(escenario.costoBebida ?? 0)}`} valor={cop(r.surtidoBebidas)} />
+            <LineaClara etiqueta="= Compras de materia prima del mes" valor={cop(r.surtidoPerros + r.surtidoBebidas)} fuerte />
+            <LineaClara etiqueta="Si se surte cada semana, en caja se necesitan" valor={cop((r.surtidoPerros + r.surtidoBebidas) / 4.3)} />
+          </dl>
+          <p className="mt-2 text-xs text-cafe-700">
+            No es un gasto más: ya está descontado en lo que deja cada perro y se recupera al vender. Es la plata que tiene que estar disponible para comprar antes de vender.
+          </p>
+        </div>
       </section>
     </Tarjeta>
   );
