@@ -146,7 +146,7 @@ export function FinanzasAdmin() {
             <Kpi etiqueta="Flujo de caja" valor={resumenMes.flujo_caja} nota="Lo que entró − todo lo que salió" />
           </div>
 
-          <SimuladorPE pe={pe.data} cargando={pe.cargando} dias={data.parametros.get("dias_operacion_mes")?.valor ?? 30} mes={mes} />
+          <SimuladorPE pe={pe.data} cargando={pe.cargando} dias={data.parametros.get("dias_operacion_mes")?.valor ?? 30} mes={mes} planes={data.planes} />
 
           <Tarjeta>
             <Subtitulo>Mes a mes</Subtitulo>
@@ -243,13 +243,18 @@ interface Escenario {
   tasaBebida: string;
   nomina: number | null;
   arriendo: number | null;
-  cuota: number | null;
+  otrosFijos: number | null;
+  inversion: number | null;
+  meses: string;
   dias: string;
+  perrosDia: string;
 }
 
-function escenarioDesde(pe: PE, dias: number): Escenario {
+function escenarioDesde(pe: PE, dias: number, planes: Plan[]): Escenario {
   const tasa = pe.tasa_adjuncion;
-  return {
+  const inversion = planes.reduce((s, p) => s + p.monto_total, 0);
+  const meses = planes[0]?.meses ?? 6;
+  const e: Escenario = {
     precio: pe.precio_perro,
     insumos: String(pe.insumos_por_perro),
     merma: String(pe.merma_pct),
@@ -259,49 +264,71 @@ function escenarioDesde(pe: PE, dias: number): Escenario {
     tasaBebida: String(tasa),
     nomina: pe.nomina,
     arriendo: pe.arriendo,
-    cuota: pe.cuota_recuperacion,
+    otrosFijos: 0,
+    inversion: inversion > 0 ? inversion : pe.cuota_recuperacion * meses,
+    meses: String(meses),
     dias: String(dias),
+    perrosDia: "0",
   };
+  // "¿Y si vendo…?" arranca en el punto de equilibrio: de ahí se sube o se baja
+  return { ...e, perrosDia: String(calcular(e).peDia ?? 30) };
 }
 
 function calcular(e: Escenario) {
   const precio = e.precio ?? 0;
-  const costoPerro =
-    (aNumero(e.insumos) ?? 0) * (1 + (aNumero(e.merma) ?? 0) / 100) +
-    precio * ((aNumero(e.comision) ?? 0) / 100) * ((aNumero(e.pctDatafono) ?? 0) / 100);
+  const insumosConMerma = (aNumero(e.insumos) ?? 0) * (1 + (aNumero(e.merma) ?? 0) / 100);
+  const comisionPerro = precio * ((aNumero(e.comision) ?? 0) / 100) * ((aNumero(e.pctDatafono) ?? 0) / 100);
+  const costoPerro = insumosConMerma + comisionPerro;
   const margenPerro = precio - costoPerro;
   const margenBebida = (e.margenBebida ?? 0) * Math.min((aNumero(e.tasaBebida) ?? 0) / 100, 1);
   const margen = margenPerro + margenBebida;
-  const fijos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.cuota ?? 0);
-  const peMes = margen > 0 ? Math.ceil(fijos / margen) : null;
+  const meses = aNumero(e.meses) ?? 0;
+  const cuota = meses > 0 ? Math.round((e.inversion ?? 0) / meses) : 0;
+  const operativos = (e.nomina ?? 0) + (e.arriendo ?? 0) + (e.otrosFijos ?? 0);
+  const fijos = operativos + cuota;
   const dias = aNumero(e.dias) ?? 30;
+  const peMes = margen > 0 ? Math.ceil(fijos / margen) : null;
+  const peSinCuota = margen > 0 ? Math.ceil(operativos / margen) : null;
+  // Escenario "¿y si vendo N perros al día?"
+  const perrosMes = (aNumero(e.perrosDia) ?? 0) * dias;
+  const margenEscenario = perrosMes * margen;
   return {
+    insumosConMerma,
+    comisionPerro,
     costoPerro,
     margenPerro,
     margenBebida,
     margen,
+    cuota,
+    operativos,
     fijos,
     peMes,
     peDia: peMes !== null && dias > 0 ? Math.ceil(peMes / dias) : null,
     pePesos: peMes !== null ? peMes * precio : null,
+    peDiaSinCuota: peSinCuota !== null && dias > 0 ? Math.ceil(peSinCuota / dias) : null,
+    perrosMes,
+    margenEscenario,
+    utilidadEscenario: margenEscenario - fijos,
+    utilidadSinCuota: margenEscenario - operativos,
   };
 }
 
-function SimuladorPE({ pe, cargando, dias, mes }: { pe?: PE; cargando: boolean; dias: number; mes: string }) {
+function SimuladorPE({ pe, cargando, dias, mes, planes }: { pe?: PE; cargando: boolean; dias: number; mes: string; planes: Plan[] }) {
   const [escenario, setEscenario] = useState<Escenario | null>(null);
   const [base, setBase] = useState<PE | undefined>(undefined);
   if (pe && pe !== base) {
     setBase(pe);
-    setEscenario(escenarioDesde(pe, dias));
+    setEscenario(escenarioDesde(pe, dias, planes));
   }
   const r = useMemo(() => (escenario ? calcular(escenario) : null), [escenario]);
-  const real = useMemo(() => (pe ? calcular(escenarioDesde(pe, dias)) : null), [pe, dias]);
-  const cambiado = r && real && (r.peDia !== real.peDia || Math.round(r.margen) !== Math.round(real.margen));
+  const real = useMemo(() => (pe ? calcular(escenarioDesde(pe, dias, planes)) : null), [pe, dias, planes]);
+  const cambiado = r && real && (r.peDia !== real.peDia || Math.round(r.margen) !== Math.round(real.margen) || r.fijos !== real.fijos);
 
   if (cargando && !pe) return <Cargando />;
   if (!pe || !escenario || !r) return null;
   const set = (c: Partial<Escenario>) => setEscenario((e) => (e ? { ...e, ...c } : e));
   const avance = Math.max(0, Math.min(100, pe.avance_pct ?? 0));
+  const perrosDia = aNumero(escenario.perrosDia) ?? 0;
 
   return (
     <Tarjeta className="!bg-cafe !ring-0 text-crema">
@@ -315,13 +342,16 @@ function SimuladorPE({ pe, cargando, dias, mes }: { pe?: PE; cargando: boolean; 
               {r.peMes ?? "—"} al mes · {r.pePesos !== null ? cop(r.pePesos) : "—"} en ventas
             </span>
           </p>
+          <p className="mt-1 text-sm text-cafe-100">
+            Sin contar la recuperación de la inversión: <strong className="text-crema">{r.peDiaSinCuota ?? "—"} perros al día</strong>
+          </p>
           {cambiado && <p className="mt-1 font-etiqueta text-sm font-semibold text-mostaza">Simulación: con los datos reales son {real?.peDia} perros/día.</p>}
         </div>
         <div className="flex gap-2">
           {pe.fuente !== "ventas_reales" && <Insignia tono="alerta">Con estimados: aún no hay ventas este mes</Insignia>}
           {cambiado && (
             <button
-              onClick={() => setEscenario(escenarioDesde(pe, dias))}
+              onClick={() => setEscenario(escenarioDesde(pe, dias, planes))}
               className="inline-flex min-h-10 items-center gap-2 rounded-full px-4 font-etiqueta text-sm font-semibold ring-2 ring-cafe-300"
             >
               <RotateCcw className="size-4" /> Volver a lo real
@@ -342,52 +372,127 @@ function SimuladorPE({ pe, cargando, dias, mes }: { pe?: PE; cargando: boolean; 
       </div>
 
       <p className="mb-3 text-sm text-cafe-100">
-        Cambia cualquier valor para simular (no se guarda). Para cambiarlo de verdad, usa Parámetros más abajo.
+        Juega con cualquier valor: el resultado cambia al instante y no se guarda. Para cambiarlo de verdad, usa Parámetros más abajo.
       </p>
-      <div className="grid gap-3 text-cafe sm:grid-cols-2 lg:grid-cols-4 [&_input]:!bg-crema">
-        <CampoSim etiqueta="Precio del perro">
-          <EntradaPesos valor={escenario.precio} alCambiar={(v) => set({ precio: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Insumos por perro ($)">
-          <EntradaNumero valor={escenario.insumos} alCambiar={(v) => set({ insumos: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Merma %">
-          <EntradaNumero valor={escenario.merma} alCambiar={(v) => set({ merma: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="% ventas por Bold">
-          <EntradaNumero valor={escenario.pctDatafono} alCambiar={(v) => set({ pctDatafono: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Margen por bebida">
-          <EntradaPesos valor={escenario.margenBebida} alCambiar={(v) => set({ margenBebida: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="% ventas con bebida">
-          <EntradaNumero valor={escenario.tasaBebida} alCambiar={(v) => set({ tasaBebida: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Nómina">
-          <EntradaPesos valor={escenario.nomina} alCambiar={(v) => set({ nomina: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Arriendo">
-          <EntradaPesos valor={escenario.arriendo} alCambiar={(v) => set({ arriendo: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Cuota recuperación">
-          <EntradaPesos valor={escenario.cuota} alCambiar={(v) => set({ cuota: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Comisión Bold %">
-          <EntradaNumero valor={escenario.comision} alCambiar={(v) => set({ comision: v })} />
-        </CampoSim>
-        <CampoSim etiqueta="Días de operación">
-          <EntradaNumero valor={escenario.dias} alCambiar={(v) => set({ dias: v })} />
-        </CampoSim>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Por cada perro */}
+        <section className="rounded-2xl bg-cafe-700/60 p-4">
+          <h3 className="mb-3 font-etiqueta text-sm font-extrabold uppercase tracking-wide text-mostaza">1 · Lo que deja cada perro</h3>
+          <div className="grid gap-3 text-cafe sm:grid-cols-2 [&_input]:!bg-crema">
+            <CampoSim etiqueta="Precio promedio del perro">
+              <EntradaPesos valor={escenario.precio} alCambiar={(v) => set({ precio: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Materia prima por perro ($)">
+              <EntradaNumero valor={escenario.insumos} alCambiar={(v) => set({ insumos: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Merma %">
+              <EntradaNumero valor={escenario.merma} alCambiar={(v) => set({ merma: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="% ventas por Bold">
+              <EntradaNumero valor={escenario.pctDatafono} alCambiar={(v) => set({ pctDatafono: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Comisión Bold %">
+              <EntradaNumero valor={escenario.comision} alCambiar={(v) => set({ comision: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Ganancia por bebida">
+              <EntradaPesos valor={escenario.margenBebida} alCambiar={(v) => set({ margenBebida: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="% ventas con bebida">
+              <EntradaNumero valor={escenario.tasaBebida} alCambiar={(v) => set({ tasaBebida: v })} />
+            </CampoSim>
+          </div>
+          <dl className="mt-4 space-y-1 border-t border-cafe-300/40 pt-3 text-sm">
+            <Linea etiqueta="Precio del perro" valor={cop(escenario.precio ?? 0)} />
+            <Linea etiqueta={`− Materia prima (con ${escenario.merma || 0}% de merma)`} valor={`−${cop(r.insumosConMerma)}`} />
+            <Linea etiqueta="− Comisión Bold (promedio por perro)" valor={`−${cop(r.comisionPerro)}`} />
+            <Linea etiqueta="= Ganancia del perro" valor={cop(r.margenPerro)} />
+            <Linea etiqueta="+ Ganancia de bebida (promedio por perro)" valor={cop(r.margenBebida)} />
+            <Linea etiqueta="= Deja cada perro vendido" valor={cop(r.margen)} fuerte />
+          </dl>
+        </section>
+
+        {/* Costos fijos */}
+        <section className="rounded-2xl bg-cafe-700/60 p-4">
+          <h3 className="mb-3 font-etiqueta text-sm font-extrabold uppercase tracking-wide text-mostaza">2 · Lo que hay que cubrir cada mes</h3>
+          <div className="grid gap-3 text-cafe sm:grid-cols-2 [&_input]:!bg-crema">
+            <CampoSim etiqueta="Nómina">
+              <EntradaPesos valor={escenario.nomina} alCambiar={(v) => set({ nomina: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Arriendo">
+              <EntradaPesos valor={escenario.arriendo} alCambiar={(v) => set({ arriendo: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Otros fijos (servicios, gas…)">
+              <EntradaPesos valor={escenario.otrosFijos} alCambiar={(v) => set({ otrosFijos: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Días de operación al mes">
+              <EntradaNumero valor={escenario.dias} alCambiar={(v) => set({ dias: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="Inversión a recuperar">
+              <EntradaPesos valor={escenario.inversion} alCambiar={(v) => set({ inversion: v })} />
+            </CampoSim>
+            <CampoSim etiqueta="En cuántos meses">
+              <EntradaNumero valor={escenario.meses} alCambiar={(v) => set({ meses: v })} />
+            </CampoSim>
+          </div>
+          <dl className="mt-4 space-y-1 border-t border-cafe-300/40 pt-3 text-sm">
+            <Linea etiqueta="Nómina" valor={cop(escenario.nomina ?? 0)} />
+            <Linea etiqueta="Arriendo" valor={cop(escenario.arriendo ?? 0)} />
+            {(escenario.otrosFijos ?? 0) > 0 && <Linea etiqueta="Otros fijos" valor={cop(escenario.otrosFijos ?? 0)} />}
+            <Linea etiqueta="= Gastos del negocio" valor={cop(r.operativos)} />
+            <Linea
+              etiqueta={`+ Recuperar inversión (${cop(escenario.inversion ?? 0)} ÷ ${escenario.meses || 0} meses)`}
+              valor={cop(r.cuota)}
+            />
+            <Linea etiqueta="= Total a cubrir al mes" valor={cop(r.fijos)} fuerte />
+          </dl>
+          {planes.length > 0 && (
+            <p className="mt-3 text-xs text-cafe-100">
+              Inversión del plan: {planes.flatMap((p) => p.plan_recuperacion_items).map((i) => `${i.concepto} ${cop(i.monto)}`).join(" · ")}
+            </p>
+          )}
+        </section>
       </div>
 
-      <dl className="mt-5 grid gap-x-6 gap-y-1 border-t border-cafe-700 pt-4 text-sm sm:grid-cols-2">
-        <Linea etiqueta="Costo total por perro" valor={cop(r.costoPerro)} />
-        <Linea etiqueta="Margen por perro" valor={cop(r.margenPerro)} />
-        <Linea etiqueta="Margen esperado de bebida por perro" valor={cop(r.margenBebida)} />
-        <Linea etiqueta="Margen combinado por perro" valor={cop(r.margen)} fuerte />
-        <Linea etiqueta="Costos fijos del mes" valor={cop(r.fijos)} fuerte />
-      </dl>
+      {/* ¿Y si vendo...? */}
+      <section className="mt-5 rounded-2xl bg-crema p-4 text-cafe">
+        <h3 className="font-etiqueta text-sm font-extrabold uppercase tracking-wide text-cafe-700">3 · ¿Y si vendo…?</h3>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 font-etiqueta font-semibold">
+            <EntradaNumero valor={escenario.perrosDia} alCambiar={(v) => set({ perrosDia: v })} className="!w-24 text-center text-xl" />
+            perros al día
+          </label>
+          <div className="flex gap-1">
+            {[-5, -1, 1, 5].map((d) => (
+              <button
+                key={d}
+                onClick={() => set({ perrosDia: String(Math.max(0, perrosDia + d)) })}
+                className="min-h-10 rounded-xl px-3 font-etiqueta text-sm font-bold ring-2 ring-cafe-100 active:bg-cafe-100"
+              >
+                {d > 0 ? `+${d}` : d}
+              </button>
+            ))}
+          </div>
+        </div>
+        <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+          <LineaClara etiqueta={`Perros al mes (${escenario.dias || 0} días)`} valor={r.perrosMes.toLocaleString("es-CO")} />
+          <LineaClara etiqueta="Ganancia de esos perros (con bebidas)" valor={cop(r.margenEscenario)} />
+          <LineaClara etiqueta="− Gastos del negocio" valor={`−${cop(r.operativos)}`} />
+          <LineaClara etiqueta="= Queda antes de recuperar inversión" valor={cop(r.utilidadSinCuota)} />
+          <LineaClara etiqueta="− Cuota de recuperación" valor={`−${cop(r.cuota)}`} />
+          <LineaClara etiqueta={r.utilidadEscenario >= 0 ? "= Utilidad del mes" : "= Pérdida del mes"} valor={cop(r.utilidadEscenario)} fuerte negativo={r.utilidadEscenario < 0} />
+        </dl>
+      </section>
     </Tarjeta>
+  );
+}
+
+function LineaClara({ etiqueta, valor, fuerte, negativo }: { etiqueta: string; valor: string; fuerte?: boolean; negativo?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className={fuerte ? "font-etiqueta font-extrabold" : "text-cafe-700"}>{etiqueta}</dt>
+      <dd className={`numeros ${fuerte ? `font-titulo text-xl font-extrabold ${negativo ? "text-rojo" : "text-exito"}` : ""}`}>{valor}</dd>
+    </div>
   );
 }
 
