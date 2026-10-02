@@ -50,6 +50,15 @@ function inicioDelMesBogota() {
   return `${diaBogota.format(new Date()).slice(0, 7)}-01T00:00:00-05:00`;
 }
 
+/** Primer día del mes anterior (para poder ver el mes pasado). */
+function inicioMesPasadoBogota() {
+  const [a, m] = diaBogota.format(new Date()).slice(0, 7).split("-").map(Number);
+  const anterior = m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, "0")}`;
+  return `${anterior}-01T00:00:00-05:00`;
+}
+
+const nombreMes = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "America/Bogota" });
+
 function porDia(ventas: VentaResumen[]): Dia[] {
   const mapa = new Map<string, Dia>();
   for (const v of ventas) {
@@ -71,7 +80,7 @@ function consultarVentas(conPagos: boolean) {
     .from("ventas")
     .select(`total, metodo_pago, vendida_en, comision_datafono, venta_items(cantidad, tipo_producto)${conPagos ? ", venta_pagos(metodo, monto)" : ""}`)
     .eq("estado", "completada")
-    .gte("vendida_en", inicioDelMesBogota());
+    .gte("vendida_en", inicioMesPasadoBogota());
 }
 
 async function obtenerDatos() {
@@ -88,7 +97,8 @@ async function obtenerDatos() {
 
 /** Cifras del día, del mes (día por día) y punto de equilibrio, en vivo. */
 export function PanelEnVivo() {
-  const [ventasMes, setVentas] = useState<VentaResumen[]>([]);
+  const [ventasDosMeses, setVentas] = useState<VentaResumen[]>([]);
+  const [verMesPasado, setVerMesPasado] = useState(false);
   const [pe, setPe] = useState<PuntoEquilibrio | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,8 +127,19 @@ export function PanelEnVivo() {
   }, [cargar]);
 
   const hoy = diaBogota.format(new Date());
+  const inicioMes = new Date(inicioDelMesBogota()).getTime();
+  const ventasMes = ventasDosMeses.filter((v) => new Date(v.vendida_en).getTime() >= inicioMes);
+  const ventasMesPasado = ventasDosMeses.filter((v) => new Date(v.vendida_en).getTime() < inicioMes);
   const ventas = ventasMes.filter((v) => diaBogota.format(new Date(v.vendida_en)) === hoy);
-  const dias = porDia(ventasMes);
+  const dias = porDia(verMesPasado ? ventasMesPasado : ventasMes);
+  const diasMesActual = porDia(ventasMes);
+  const mesActual = {
+    total: diasMesActual.reduce((s, d) => s + d.total, 0),
+    perros: diasMesActual.reduce((s, d) => s + d.perros, 0),
+    bebidas: diasMesActual.reduce((s, d) => s + d.bebidas, 0),
+  };
+  const nombreMesPasado = nombreMes.format(new Date(inicioMesPasadoBogota()));
+  const nombreMesActual = nombreMes.format(new Date(inicioDelMesBogota()));
   const mes = {
     total: dias.reduce((s, d) => s + d.total, 0),
     perros: dias.reduce((s, d) => s + d.perros, 0),
@@ -158,9 +179,26 @@ export function PanelEnVivo() {
         </section>
 
         <section>
-          <h2 className="font-titulo text-2xl font-extrabold">Este mes</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-titulo text-2xl font-extrabold first-letter:uppercase">
+              {verMesPasado ? `${nombreMesPasado} (mes pasado)` : "Este mes"}
+            </h2>
+            <div className="flex gap-1 rounded-full bg-crema-200 p-1">
+              {[false, true].map((pasado) => (
+                <button
+                  key={String(pasado)}
+                  onClick={() => setVerMesPasado(pasado)}
+                  className={`min-h-9 rounded-full px-4 font-etiqueta text-sm font-semibold first-letter:uppercase ${
+                    verMesPasado === pasado ? "bg-cafe text-crema" : "text-cafe-700"
+                  }`}
+                >
+                  {pasado ? nombreMesPasado : nombreMesActual}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Tarjeta etiqueta="Ventas del mes" valor={cop(mes.total)} destacado />
+            <Tarjeta etiqueta={verMesPasado ? `Ventas de ${nombreMesPasado}` : "Ventas del mes"} valor={cop(mes.total)} destacado />
             <Tarjeta etiqueta="Perros vendidos" valor={String(mes.perros)} />
             <Tarjeta etiqueta="Bebidas vendidas" valor={String(mes.bebidas)} />
             <Tarjeta etiqueta="Perros por día" valor={dias.length ? (mes.perros / dias.length).toFixed(1) : "—"} nota={`${dias.length} ${dias.length === 1 ? "día" : "días"} con ventas`} />
@@ -212,16 +250,16 @@ export function PanelEnVivo() {
                 <span className="ml-2 font-etiqueta font-semibold">perros/día</span>
               </p>
               <p className="text-cafe-100">
-                {pe.pe_unidades_mes ?? "—"} al mes · margen combinado {cop(pe.margen_combinado_por_perro)} por perro
+                {pe.pe_unidades_mes ?? "—"} al mes · cada perro deja {cop(pe.margen_combinado_por_perro)} (promedio de los últimos 30 días)
               </p>
             </div>
             {pe.fuente === "ventas_reales" && (
               <dl className="mt-5 max-w-xl space-y-1 rounded-2xl bg-cafe-700/60 p-4 text-sm sm:text-base">
                 <FilaMargen
-                  etiqueta={`Ventas del mes (${mes.perros} perros · ${mes.bebidas} bebidas)`}
-                  valor={mes.total}
+                  etiqueta={`Ventas del mes (${mesActual.perros} perros · ${mesActual.bebidas} bebidas)`}
+                  valor={mesActual.total}
                 />
-                <FilaMargen etiqueta={`− Insumos usados (con ${pe.merma_pct}% de merma)`} valor={-(mes.total - comisionMes - pe.margen_contribucion_mes)} />
+                <FilaMargen etiqueta={`− Insumos usados (con ${pe.merma_pct}% de merma)`} valor={-(mesActual.total - comisionMes - pe.margen_contribucion_mes)} />
                 <FilaMargen etiqueta="− Comisión Bold" valor={-comisionMes} />
                 <FilaMargen etiqueta="= Margen acumulado" valor={pe.margen_contribucion_mes} fuerte />
               </dl>
