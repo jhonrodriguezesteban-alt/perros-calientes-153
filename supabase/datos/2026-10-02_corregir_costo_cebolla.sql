@@ -8,84 +8,91 @@
 --      (1 cebolla ≈ 150 g) y se corrige lo que entró al inventario.
 --   2. El costo de la cebolla queda en el de esa compra por gramo.
 --   3. Las ventas que gastaron cebolla con ese costo se recalculan.
+-- Un solo bloque (sin tablas temporales) para el SQL Editor de Supabase.
 -- Se puede correr más de una vez (si ya está bien, no cambia nada).
 -- =====================================================================
-begin;
+do $$
+declare
+  v_ceb     bigint := (select id from insumos where nombre = 'Cebolla cabezona');
+  v_items   bigint[];
+  v_compras uuid[];
+  v_desde   timestamptz;
+  v_ventas  uuid[];
+  v_costo   numeric;
+begin
+  if v_ceb is null then
+    raise notice 'No existe el insumo Cebolla cabezona';
+    return;
+  end if;
 
-create temp table _cebolla on commit drop as
-select id from insumos where nombre = 'Cebolla cabezona';
+  -- 1. Compras registradas por unidades → gramos
+  select array_agg(ci.id), array_agg(distinct ci.compra_id), min(c.creado_en)
+    into v_items, v_compras, v_desde
+    from compra_items ci join compras c on c.id = ci.compra_id
+   where ci.insumo_id = v_ceb and ci.costo_total / ci.cantidad > 100;
 
--- 1. Compras registradas por unidades → gramos
-create temp table _malas on commit drop as
-select ci.id, ci.compra_id, (select c.creado_en from compras c where c.id = ci.compra_id) as desde
-  from compra_items ci
- where ci.insumo_id = (select id from _cebolla)
-   and ci.costo_total / ci.cantidad > 100;
+  if v_items is not null then
+    update compra_items set cantidad = cantidad * 150 where id = any (v_items);
 
-update compra_items set cantidad = cantidad * 150 where id in (select id from _malas);
+    -- Lo que entró al inventario (al borrar y volver a meter, el stock se corrige)
+    delete from movimientos_inventario
+     where tipo = 'compra' and insumo_id = v_ceb and compra_id = any (v_compras);
+    insert into movimientos_inventario (insumo_id, tipo, cantidad, costo_unitario, compra_id, nota, creado_en)
+    select ci.insumo_id, 'compra', ci.cantidad, round(ci.costo_total / ci.cantidad, 4), ci.compra_id,
+           'Corregido: la compra se había registrado por unidades (1 cebolla ≈ 150 g)', c.creado_en
+      from compra_items ci join compras c on c.id = ci.compra_id
+     where ci.id = any (v_items);
+  end if;
 
--- Lo que entró al inventario por esas compras (al borrar y volver a meter, el stock se corrige)
-delete from movimientos_inventario
- where tipo = 'compra' and insumo_id = (select id from _cebolla)
-   and compra_id in (select compra_id from _malas);
-insert into movimientos_inventario (insumo_id, tipo, cantidad, costo_unitario, compra_id, nota, creado_en)
-select ci.insumo_id, 'compra', ci.cantidad, round(ci.costo_total / ci.cantidad, 4), ci.compra_id,
-       'Corregido: la compra se había registrado por unidades (1 cebolla ≈ 150 g)', c.creado_en
-  from compra_items ci join compras c on c.id = ci.compra_id
- where ci.id in (select id from _malas);
+  -- 2. Costo por gramo: el de la última compra de cebolla (ya en gramos)
+  perform set_config('bpc.origen_costo', 'manual', true);
+  perform set_config('bpc.motivo_costo', 'Corrección: compra de cebolla registrada por unidades', true);
+  update insumos
+     set costo_unitario = (select round(ci.costo_total / ci.cantidad, 4)
+                             from compra_items ci join compras c on c.id = ci.compra_id
+                            where ci.insumo_id = v_ceb
+                            order by c.fecha desc, c.creado_en desc limit 1)
+   where id = v_ceb and (costo_unitario > 100 or v_items is not null);
+  select costo_unitario into v_costo from insumos where id = v_ceb;
 
--- 2. Costo por gramo: el de la última compra de cebolla (ya en gramos)
-select set_config('bpc.origen_costo', 'manual', true),
-       set_config('bpc.motivo_costo', 'Corrección: compra de cebolla registrada por unidades', true);
-update insumos i
-   set costo_unitario = x.costo
-  from (select round(ci.costo_total / ci.cantidad, 4) as costo
-          from compra_items ci join compras c on c.id = ci.compra_id
-         where ci.insumo_id = (select id from _cebolla)
-         order by c.fecha desc, c.creado_en desc limit 1) x
- where i.id = (select id from _cebolla)
-   and (i.costo_unitario > 100 or exists (select 1 from _malas));
+  -- 3. Ventas con el costo dañado (o posteriores a la compra corregida)
+  select array_agg(distinct venta_id) into v_ventas
+    from movimientos_inventario
+   where insumo_id = v_ceb and venta_id is not null and tipo = 'consumo_venta'
+     and (costo_unitario > 100 or (v_desde is not null and creado_en >= v_desde));
 
--- 3. Consumos de cebolla con el costo dañado → costo corregido
--- (las que tienen el costo dañado, o las posteriores a la compra corregida)
-create temp table _ventas_tocadas on commit drop as
-select distinct venta_id from movimientos_inventario
- where insumo_id = (select id from _cebolla) and venta_id is not null and tipo = 'consumo_venta'
-   and (costo_unitario > 100 or creado_en >= (select min(desde) from _malas));
+  if v_ventas is null then
+    return;
+  end if;
 
-update movimientos_inventario
-   set costo_unitario = (select costo_unitario from insumos where id = (select id from _cebolla))
- where insumo_id = (select id from _cebolla) and tipo = 'consumo_venta'
-   and venta_id in (select venta_id from _ventas_tocadas);
+  update movimientos_inventario set costo_unitario = v_costo
+   where insumo_id = v_ceb and tipo = 'consumo_venta' and venta_id = any (v_ventas);
 
--- Recalcular el costo de esas ventas con lo que de verdad descontaron
-update venta_items vi
-   set costo_unitario = round(x.costo / vi.cantidad, 2)
-  from (select vi2.id as item_id,
-               sum(c.cantidad * coalesce(m.costo_unitario, i.costo_unitario)) as costo
-          from venta_items vi2
-          join (select vi3.venta_id, vi3.id as item_id, r.insumo_id, r.cantidad * vi3.cantidad as cantidad
-                  from venta_items vi3 join receta_items r on r.producto_id = vi3.producto_id
-                union all
-                select vi3.venta_id, vi3.id, ti.insumo_id, ti.cantidad * vi3.cantidad
-                  from venta_items vi3
-                  join venta_item_toppings vt on vt.venta_item_id = vi3.id
-                  join topping_insumos ti on ti.topping_id = vt.topping_id) c on c.item_id = vi2.id
-          join insumos i on i.id = c.insumo_id
-          left join lateral (select max(mm.costo_unitario) as costo_unitario from movimientos_inventario mm
-                              where mm.venta_id = c.venta_id and mm.insumo_id = c.insumo_id
-                                and mm.tipo = 'consumo_venta') m on true
-         where vi2.venta_id in (select venta_id from _ventas_tocadas)
-         group by vi2.id) x
- where vi.id = x.item_id;
+  update venta_items vi
+     set costo_unitario = round(x.costo / vi.cantidad, 2)
+    from (select c.item_id, sum(c.cantidad * coalesce(m.costo, i.costo_unitario)) as costo
+            from (select vi3.venta_id, vi3.id as item_id, r.insumo_id, r.cantidad * vi3.cantidad as cantidad
+                    from venta_items vi3 join receta_items r on r.producto_id = vi3.producto_id
+                   where vi3.venta_id = any (v_ventas)
+                  union all
+                  select vi3.venta_id, vi3.id, ti.insumo_id, ti.cantidad * vi3.cantidad
+                    from venta_items vi3
+                    join venta_item_toppings vt on vt.venta_item_id = vi3.id
+                    join topping_insumos ti on ti.topping_id = vt.topping_id
+                   where vi3.venta_id = any (v_ventas)) c
+            join insumos i on i.id = c.insumo_id
+            left join lateral (select max(mm.costo_unitario) as costo from movimientos_inventario mm
+                                where mm.venta_id = c.venta_id and mm.insumo_id = c.insumo_id
+                                  and mm.tipo = 'consumo_venta') m on true
+           group by c.item_id) x
+   where vi.id = x.item_id;
 
-update ventas v
-   set costo_insumos = round(x.costo, 2)
-  from (select venta_id, sum(costo_unitario * cantidad) as costo from venta_items
-         where venta_id in (select venta_id from _ventas_tocadas) group by 1) x
- where v.id = x.venta_id;
-
-commit;
+  update ventas v
+     set costo_insumos = round(x.costo, 2)
+    from (select venta_id, sum(costo_unitario * cantidad) as costo from venta_items
+           where venta_id = any (v_ventas) group by 1) x
+   where v.id = x.venta_id;
+end $$;
 
 -- Revisión
 select nombre, round(costo_unitario, 2) as costo_por_gramo, round(stock_actual) as stock_g
