@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Modal } from "@/components/modal";
 import { db, FAMILIAS, hoyBogota, PAGOS_COMPRA, type Compra, type Insumo, type PagoCompra } from "@/lib/admin";
 import { cop } from "@/lib/formato";
+import { ModalInsumo } from "./modal-insumo";
 import { aNumero, Boton, Campo, Entrada, EntradaNumero, EntradaPesos, exigir, mensajeError, MensajeError, Selector } from "./ui";
 
 interface Renglon {
@@ -51,9 +52,11 @@ export function ModalEditarCompra({
   ]);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [creandoPara, setCreandoPara] = useState<number | null>(null);
+  const [nuevos, setNuevos] = useState<Insumo[]>([]);
 
   // Insumos de la compra que ya no están activos también se pueden elegir
-  const lista: Pick<Insumo, "id" | "nombre" | "unidad" | "familia">[] = [...insumos];
+  const lista: Pick<Insumo, "id" | "nombre" | "unidad" | "familia">[] = [...insumos, ...nuevos];
   for (const i of compra.compra_items) {
     if (i.insumos && !lista.some((x) => x.id === i.insumo_id)) {
       lista.push({ id: i.insumo_id, nombre: i.insumos.nombre, unidad: i.insumos.unidad, familia: "otros" });
@@ -142,7 +145,9 @@ export function ModalEditarCompra({
                 <Selector
                   value={r.equipo !== undefined ? "equipo" : (r.insumo_id ?? "")}
                   onChange={(e) =>
-                    e.target.value === "equipo"
+                    e.target.value === "nuevo"
+                      ? setCreandoPara(r.clave)
+                      : e.target.value === "equipo"
                       ? cambiar(r.clave, { insumo_id: null, equipo: "" })
                       : cambiar(r.clave, { insumo_id: e.target.value ? Number(e.target.value) : null, equipo: undefined })
                   }
@@ -160,6 +165,7 @@ export function ModalEditarCompra({
                       </optgroup>
                     );
                   })}
+                  <option value="nuevo">+ Crear insumo nuevo…</option>
                   <option value="equipo">Equipo o utensilio (no va al inventario)</option>
                 </Selector>
               </Campo>
@@ -231,6 +237,16 @@ export function ModalEditarCompra({
         <div className="mt-4">
           <MensajeError>{error}</MensajeError>
         </div>
+      )}
+      {creandoPara !== null && (
+        <ModalInsumo
+          alCerrar={() => setCreandoPara(null)}
+          alGuardar={(nuevo) => {
+            setNuevos((ns) => [...ns, nuevo]);
+            cambiar(creandoPara, { insumo_id: nuevo.id, equipo: undefined });
+            setCreandoPara(null);
+          }}
+        />
       )}
     </Modal>
   );
