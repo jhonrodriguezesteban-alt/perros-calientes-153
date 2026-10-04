@@ -1,12 +1,14 @@
 "use client";
 
 import { ArrowDown, ArrowUp, Camera, ChevronDown, Images, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db, FAMILIAS, fechaCorta, hoyBogota, PAGOS_COMPRA, type Compra, type Insumo, type PagoCompra, type Solicitud } from "@/lib/admin";
 import { NOMBRE_MEDIO_FACTURA, prepararFoto, type FacturaLeida, type ItemLeido } from "@/lib/factura";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { costoTexto } from "./inventario-admin";
 import { ModalEditarCompra } from "./editar-compra";
+import type { RetiroCaja } from "./registrar-retiro";
 import { ModalInsumo } from "./modal-insumo";
 import {
   aNumero,
@@ -78,8 +80,11 @@ const lineaVacia = (insumo_id: number | null = null, cantidad = ""): Linea => ({
   costo_total: null,
 });
 
-export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }) {
+export function ComprasAdmin({ solicitudInicial, retiroInicial }: { solicitudInicial?: string; retiroInicial?: string }) {
   const { data, error, cargando, recargar } = useDatos(cargarCompras);
+  const router = useRouter();
+  /** Compra hecha con un retiro de caja que ya salió (Caja → Registrar): se usa ese retiro. */
+  const [retiro, setRetiro] = useState<RetiroCaja | null>(null);
   const [fecha, setFecha] = useState(hoyBogota());
   const [proveedor, setProveedor] = useState("");
   const [lineas, setLineas] = useState<Linea[]>([lineaVacia()]);
@@ -132,6 +137,23 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
   }
 
   const total = lineas.reduce((s, l) => s + (l.costo_total ?? 0), 0);
+
+  useEffect(() => {
+    if (!retiroInicial) return;
+    void db()
+      .from("retiros_caja")
+      .select("id, monto, tercero, motivo, creado_en")
+      .eq("id", retiroInicial)
+      .is("anulado_en", null)
+      .maybeSingle<RetiroCaja>()
+      .then(({ data: r }) => {
+        if (!r) return;
+        setRetiro(r);
+        setFecha(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date(r.creado_en)));
+        setProveedor((p) => p || r.tercero);
+        setPagadoCon("caja");
+      });
+  }, [retiroInicial]);
 
   // Lee la foto (o fotos) de la factura con Claude y llena el formulario para revisarlo.
   const leerFactura = async (archivos: FileList | null) => {
@@ -202,25 +224,35 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
       if (!c || c <= 0) return setAviso({ tipo: "error", texto: `Falta la cantidad de ${insumos.get(l.insumo_id!)?.nombre}.` });
       if (l.costo_total === null) return setAviso({ tipo: "error", texto: `Falta cuánto costó ${insumos.get(l.insumo_id!)?.nombre}.` });
     }
-    if (!pagadoCon) return setAviso({ tipo: "error", texto: "Elige con qué se pagó la compra." });
+    if (!pagadoCon && !retiro) return setAviso({ tipo: "error", texto: "Elige con qué se pagó la compra." });
     if (pagadoCon === "socio" && !socioId) return setAviso({ tipo: "error", texto: "Elige qué socio puso la plata." });
     setGuardando(true);
     try {
+      const compra = {
+        fecha,
+        proveedor,
+        pagado_con: pagadoCon,
+        socio_id: pagadoCon === "socio" ? socioId : null,
+        registrar_gasto: registrarGasto,
+        items: validas.map((l) => ({ insumo_id: l.insumo_id, cantidad: aNumero(l.cantidad), costo_total: l.costo_total })),
+        equipos: equipos.map((l) => ({ descripcion: l.equipo!.trim(), costo_total: l.costo_total })),
+        solicitudes: [...solicitudes],
+      };
       exigir(
-        await db().rpc("registrar_compra", {
-          p_compra: {
-            fecha,
-            proveedor,
-            pagado_con: pagadoCon,
-            socio_id: pagadoCon === "socio" ? socioId : null,
-            registrar_gasto: registrarGasto,
-            items: validas.map((l) => ({ insumo_id: l.insumo_id, cantidad: aNumero(l.cantidad), costo_total: l.costo_total })),
-            equipos: equipos.map((l) => ({ descripcion: l.equipo!.trim(), costo_total: l.costo_total })),
-            solicitudes: [...solicitudes],
-          },
-        }),
+        retiro
+          ? await db().rpc("registrar_compra_de_retiro", { p_retiro_id: retiro.id, p_compra: compra })
+          : await db().rpc("registrar_compra", { p_compra: compra }),
       );
-      setAviso({ tipo: "ok", texto: `Compra de ${cop(total)} registrada. El inventario y los costos ya se actualizaron.` });
+      setAviso({
+        tipo: "ok",
+        texto: retiro
+          ? `Compra de ${cop(total)} registrada con el retiro de ${cop(retiro.monto)}. No se descontó otra vez de la caja.`
+          : `Compra de ${cop(total)} registrada. El inventario y los costos ya se actualizaron.`,
+      });
+      if (retiro) {
+        setRetiro(null);
+        router.replace("/panel/compras");
+      }
       setLineas([lineaVacia()]);
       setSolicitudes(new Set());
       setProveedor("");
@@ -267,6 +299,19 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
               <input ref={galeria} type="file" accept="image/*" multiple hidden onChange={(e) => void leerFactura(e.target.files)} />
               {leyendo && <p className="mt-2 text-sm text-cafe-700">Esto tarda entre 20 segundos y un minuto.</p>}
             </div>
+            {retiro && (
+              <div className="mb-5 rounded-2xl bg-cafe px-4 py-3 text-crema">
+                <p className="font-etiqueta font-extrabold">
+                  Compra con el retiro de caja de {cop(retiro.monto)} · {fechaCorta(retiro.creado_en)} · {retiro.tercero}
+                  {retiro.motivo && ` · ${retiro.motivo}`}
+                </p>
+                <p className="text-sm opacity-90">
+                  Queda pagada con ese efectivo (no se descuenta otra vez de la caja).
+                  {total > 0 && total !== retiro.monto &&
+                    ` La compra suma ${cop(total)}: ${total < retiro.monto ? `sobran ${cop(retiro.monto - total)} del retiro (¿volvieron a la caja?)` : `${cop(total - retiro.monto)} más que el retiro`}.`}
+                </p>
+              </div>
+            )}
             {lectura && <ResumenLectura lectura={lectura} total={total} />}
             <div className="grid gap-4 sm:grid-cols-2">
               <Campo etiqueta="Fecha">
@@ -395,7 +440,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
               </Boton>
             </div>
 
-            <div className="mt-5 border-t-2 border-cafe-100 pt-4">
+            <div className={`mt-5 border-t-2 border-cafe-100 pt-4 ${retiro ? "hidden" : ""}`}>
               <p className="mb-2 font-etiqueta text-sm font-semibold text-cafe-700">¿Con qué se pagó?</p>
               <div className="flex flex-wrap gap-2">
                 {PAGOS_COMPRA.map((p) => (
@@ -424,7 +469,10 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                 </div>
               )}
               {pagadoCon === "caja" && fecha === hoyBogota() && (
-                <p className="mt-2 text-sm text-cafe-700">Sale de la caja de hoy como retiro, para que el cierre del día cuadre.</p>
+                <p className="mt-2 text-sm text-cafe-700">
+                  Sale de la caja de hoy como retiro, para que el cierre del día cuadre. Si Andrea ya sacó esa plata con un retiro, mejor
+                  regístrala desde Caja → Retiros → “Registrar”, para no descontarla dos veces.
+                </p>
               )}
             </div>
 
