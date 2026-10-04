@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Camera, ChevronDown, Images, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, ChevronDown, Images, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { db, FAMILIAS, fechaCorta, hoyBogota, PAGOS_COMPRA, type Compra, type Insumo, type PagoCompra, type Solicitud } from "@/lib/admin";
 import { NOMBRE_MEDIO_FACTURA, prepararFoto, type FacturaLeida, type ItemLeido } from "@/lib/factura";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { costoTexto } from "./inventario-admin";
+import { ModalEditarCompra } from "./editar-compra";
 import { ModalInsumo } from "./modal-insumo";
 import {
   aNumero,
@@ -39,7 +40,7 @@ interface Linea {
 }
 
 const SELECT_COMPRA =
-  "id, fecha, proveedor, gasto_id, pagado_con, monto_socio, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(cantidad, costo_total, insumos(nombre, unidad)), equipos:gastos!gastos_compra_id_fkey(monto, descripcion)";
+  "id, fecha, proveedor, gasto_id, pagado_con, monto_socio, socio:perfiles!compras_socio_id_fkey(nombre), compra_items(insumo_id, cantidad, costo_total, insumos(nombre, unidad)), equipos:gastos!gastos_compra_id_fkey(monto, descripcion)";
 
 async function cargarCompras() {
   const [insumos, compras, solicitudes, socios, prestadas] = await Promise.all([
@@ -87,6 +88,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
   const [pagadoCon, setPagadoCon] = useState<PagoCompra | null>(null);
   const [socioId, setSocioId] = useState("");
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [editando, setEditando] = useState<Compra | null>(null);
   const [creandoInsumoPara, setCreandoInsumoPara] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
@@ -185,6 +187,12 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
     const validas = lineas.filter((l) => l.insumo_id !== null && l.equipo === undefined);
     const equipos = lineas.filter((l) => l.equipo !== undefined);
     if (validas.length + equipos.length === 0) return setAviso({ tipo: "error", texto: "Agrega al menos un insumo o equipo." });
+    // Un renglón con valor pero sin insumo no se puede descartar callado: el total no cuadraría.
+    const sinInsumo = lineas.find((l) => l.insumo_id === null && l.equipo === undefined && (l.costo_total || l.cantidad.trim() || l.leido));
+    if (sinInsumo) {
+      const que = sinInsumo.leido ? `de “${sinInsumo.leido.descripcion}”` : `del renglón de ${cop(sinInsumo.costo_total ?? 0)}`;
+      return setAviso({ tipo: "error", texto: `Elige o crea el insumo ${que} (o quita ese renglón).` });
+    }
     for (const l of equipos) {
       if (!l.equipo?.trim()) return setAviso({ tipo: "error", texto: "Escribe qué equipo o utensilio se compró." });
       if (!l.costo_total) return setAviso({ tipo: "error", texto: `Falta cuánto costó ${l.equipo}.` });
@@ -486,6 +494,11 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
                         )}
                       </button>
                       {abierta === c.id && (
+                        <Boton variante="suave" className="mt-3 !min-h-10 px-3 text-sm" onClick={() => setEditando(c)}>
+                          <Pencil className="size-4" /> Editar compra
+                        </Boton>
+                      )}
+                      {abierta === c.id && (
                         <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-etiqueta font-semibold text-cafe-700">Se pagó con:</span>
                           <select
@@ -558,6 +571,20 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
         </>
       )}
 
+      {editando && data && (
+        <ModalEditarCompra
+          compra={editando}
+          insumos={data.insumos}
+          socios={data.socios}
+          alCerrar={() => setEditando(null)}
+          alGuardar={() => {
+            setEditando(null);
+            setAviso({ tipo: "ok", texto: "Compra corregida. El inventario y los costos ya se ajustaron." });
+            recargar();
+          }}
+        />
+      )}
+
       {creandoInsumoPara !== null && (
         <ModalInsumo
           {...propsInsumoNuevo(lineas.find((l) => l.clave === creandoInsumoPara))}
@@ -576,7 +603,7 @@ export function ComprasAdmin({ solicitudInicial }: { solicitudInicial?: string }
 function textoPago(c: Compra) {
   if (!c.pagado_con) return "pago sin registrar";
   if (c.pagado_con === "socio") return `lo pagó ${c.socio?.nombre ?? "un socio"}`;
-  const medio = PAGOS_COMPRA.find((p) => p.id === c.pagado_con)?.nombre.toLowerCase() ?? c.pagado_con;
+  const medio = PAGOS_COMPRA.find((p) => p.id === c.pagado_con)?.nombre ?? c.pagado_con;
   return c.monto_socio ? `${medio} + ${c.socio?.nombre ?? "un socio"} puso ${cop(c.monto_socio)}` : medio;
 }
 
