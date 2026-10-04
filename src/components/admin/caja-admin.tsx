@@ -7,6 +7,7 @@ import { db } from "@/lib/admin";
 import { cop, horaBogota } from "@/lib/formato";
 import type { ResumenDia } from "@/lib/tipos";
 import { Modal } from "@/components/modal";
+import { ModalRegistrarRetiro, type RetiroCaja } from "./registrar-retiro";
 import {
   Boton,
   Campo,
@@ -52,7 +53,7 @@ interface Retiro {
 }
 
 async function cargarCaja() {
-  const [c, r] = await Promise.all([
+  const [c, r, k] = await Promise.all([
     db()
       .from("turnos")
       .select(
@@ -65,9 +66,13 @@ async function cargarCaja() {
       .select("id, monto, tercero, motivo, creado_en, anulado_en, quien:perfiles!retiros_caja_registrado_por_fkey(nombre)")
       .order("creado_en", { ascending: false })
       .limit(100),
+    db().rpc("retiros_clasificados", { p_limite: 150 }),
   ]);
-  return { cierres: exigir(c) as unknown as Cierre[], retiros: exigir(r) as unknown as Retiro[] };
+  const registro = new Map(((exigir(k) ?? []) as { id: string; registro: string | null }[]).map((x) => [x.id, x.registro]));
+  return { cierres: exigir(c) as unknown as Cierre[], retiros: exigir(r) as unknown as Retiro[], registro };
 }
+
+const NOMBRE_REGISTRO: Record<string, string> = { compra: "Compra", gasto: "Gasto", pago: "Vale / préstamo", sin_gasto: "No es gasto" };
 
 const fecha = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "America/Bogota" });
 
@@ -78,6 +83,7 @@ export function CajaAdmin() {
   const [abierto, setAbierto] = useState<string | null>(null);
   const [ordenando, setOrdenando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [registrando, setRegistrando] = useState<RetiroCaja | null>(null);
 
   // Trae a este cierre las ventas del mismo día que quedaron en otra caja
   // (p. ej. vendidas antes de abrir, con la caja del día anterior abierta).
@@ -97,6 +103,7 @@ export function CajaAdmin() {
   };
 
   const retirosVigentes = (data?.retiros ?? []).filter((r) => !r.anulado_en);
+  const sinRegistrar = retirosVigentes.filter((r) => !data?.registro.get(r.id));
   const porTercero = new Map<string, number>();
   for (const r of retirosVigentes) porTercero.set(r.tercero, (porTercero.get(r.tercero) ?? 0) + r.monto);
 
@@ -172,6 +179,16 @@ export function CajaAdmin() {
 
           <Tarjeta>
             <Subtitulo>Retiros de efectivo</Subtitulo>
+            {sinRegistrar.length > 0 && (
+              <p className="mb-4 rounded-2xl bg-mostaza-100/70 px-4 py-3 text-sm ring-2 ring-mostaza">
+                <strong>
+                  {sinRegistrar.length} {sinRegistrar.length === 1 ? "retiro sin registrar" : "retiros sin registrar"} por{" "}
+                  {cop(sinRegistrar.reduce((s, r) => s + r.monto, 0))}
+                </strong>
+                . Ya salieron de la caja, pero no están en Compras ni en Gastos. Toca “Registrar” en cada uno para decir en qué se usó (no
+                se descuenta otra vez de la caja).
+              </p>
+            )}
             {porTercero.size > 0 && (
               <div className="mb-4 flex flex-wrap gap-2">
                 {[...porTercero.entries()]
@@ -199,13 +216,34 @@ export function CajaAdmin() {
                         {r.quien && ` · registró ${r.quien.nombre}`}
                       </p>
                     </div>
-                    <span className={`numeros font-titulo text-lg font-bold ${r.anulado_en ? "line-through" : ""}`}>{cop(r.monto)}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {!r.anulado_en &&
+                        (data.registro.get(r.id) ? (
+                          <Insignia tono="ok">{NOMBRE_REGISTRO[data.registro.get(r.id)!] ?? "Registrado"}</Insignia>
+                        ) : (
+                          <Boton variante="suave" className="!min-h-9 px-3 text-sm" onClick={() => setRegistrando(r)}>
+                            Registrar
+                          </Boton>
+                        ))}
+                      <span className={`numeros font-titulo text-lg font-bold ${r.anulado_en ? "line-through" : ""}`}>{cop(r.monto)}</span>
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
           </Tarjeta>
         </>
+      )}
+      {registrando && (
+        <ModalRegistrarRetiro
+          retiro={registrando}
+          alCerrar={() => setRegistrando(null)}
+          alGuardar={(texto) => {
+            setRegistrando(null);
+            setAviso(texto);
+            recargar();
+          }}
+        />
       )}
       {corrigiendo && (
         <ModalCorregir
