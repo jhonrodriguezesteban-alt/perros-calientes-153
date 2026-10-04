@@ -68,8 +68,9 @@ async function cargarCaja() {
       .limit(100),
     db().rpc("retiros_clasificados", { p_limite: 150 }),
   ]);
-  const registro = new Map(((exigir(k) ?? []) as { id: string; registro: string | null }[]).map((x) => [x.id, x.registro]));
-  return { cierres: exigir(c) as unknown as Cierre[], retiros: exigir(r) as unknown as Retiro[], registro };
+  // Si la base aún no tiene la función (falta correr la migración), la caja abre igual
+  const registro = new Map(((k.error ? [] : (k.data ?? [])) as { id: string; registro: string | null }[]).map((x) => [x.id, x.registro]));
+  return { cierres: exigir(c) as unknown as Cierre[], retiros: exigir(r) as unknown as Retiro[], registro, clasificar: !k.error };
 }
 
 const NOMBRE_REGISTRO: Record<string, string> = { compra: "Compra", gasto: "Gasto", pago: "Vale / préstamo", sin_gasto: "No es gasto" };
@@ -103,7 +104,7 @@ export function CajaAdmin() {
   };
 
   const retirosVigentes = (data?.retiros ?? []).filter((r) => !r.anulado_en);
-  const sinRegistrar = retirosVigentes.filter((r) => !data?.registro.get(r.id));
+  const sinRegistrar = data?.clasificar ? retirosVigentes.filter((r) => !data.registro.get(r.id)) : [];
   const porTercero = new Map<string, number>();
   for (const r of retirosVigentes) porTercero.set(r.tercero, (porTercero.get(r.tercero) ?? 0) + r.monto);
 
@@ -218,6 +219,7 @@ export function CajaAdmin() {
                     </div>
                     <span className="flex shrink-0 items-center gap-2">
                       {!r.anulado_en &&
+                        data.clasificar &&
                         (data.registro.get(r.id) ? (
                           <Insignia tono="ok">{NOMBRE_REGISTRO[data.registro.get(r.id)!] ?? "Registrado"}</Insignia>
                         ) : (

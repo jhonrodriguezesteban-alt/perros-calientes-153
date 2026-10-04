@@ -89,14 +89,13 @@ async function cargarNomina() {
       .limit(300),
     db().from("perfiles").select("id, nombre, rol").eq("activo", true).order("nombre"),
   ]);
-  const acuerdos = exigir(await db().from("nomina_acuerdos").select("persona, valor_turno, desde").order("persona")) as {
-    persona: string;
-    valor_turno: number;
-    desde: string;
-  }[];
+  // Si la base aún no tiene la nómina por semanas (falta la migración), la página abre igual
+  const r = await db().from("nomina_acuerdos").select("persona, valor_turno, desde").order("persona");
+  const acuerdos = (r.error ? [] : r.data) as { persona: string; valor_turno: number; desde: string }[];
   const semanas = new Map<string, Semana[]>();
   for (const a of acuerdos) {
-    semanas.set(a.persona, exigir(await db().rpc("nomina_semanas", { p_persona: a.persona })) as Semana[]);
+    const w = await db().rpc("nomina_semanas", { p_persona: a.persona });
+    if (!w.error) semanas.set(a.persona, w.data as Semana[]);
   }
   return { movimientos: exigir(m) as unknown as Movimiento[], personas: exigir(p) as Persona[], acuerdos, semanas };
 }
