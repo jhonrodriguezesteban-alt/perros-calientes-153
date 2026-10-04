@@ -54,7 +54,7 @@ const TIPOS: Record<Tipo, { nombre: string; boton: string; ayuda: string }> = {
 };
 
 const PAGOS_ABONO: { id: PagoCompra; nombre: string }[] = [
-  { id: "transferencia", nombre: "Transferencia / Nequi" },
+  { id: "transferencia", nombre: "A Nequi" },
   { id: "fondo", nombre: "Al fondo de inversión" },
   { id: "efectivo", nombre: "Efectivo (a un socio)" },
 ];
@@ -445,7 +445,7 @@ function agrupar(ms: Movimiento[], valor: (m: Movimiento) => number) {
 }
 
 function nombrePago(m: Movimiento) {
-  if (m.tipo === "abono") return PAGOS_ABONO.find((p) => p.id === m.pagado_con)?.nombre.toLowerCase() ?? m.pagado_con;
+  if (m.tipo === "abono") return PAGOS_ABONO.find((p) => p.id === m.pagado_con)?.nombre ?? m.pagado_con;
   if (m.pagado_con === "socio") return `lo pagó ${m.socio?.nombre ?? "un socio"}`;
-  return PAGOS_COMPRA.find((p) => p.id === m.pagado_con)?.nombre.toLowerCase() ?? m.pagado_con;
+  return PAGOS_COMPRA.find((p) => p.id === m.pagado_con)?.nombre ?? m.pagado_con;
 }

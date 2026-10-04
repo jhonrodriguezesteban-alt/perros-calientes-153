@@ -45,8 +45,8 @@ export type PagoCompra = "caja" | "efectivo" | "tarjeta" | "transferencia" | "so
 export const PAGOS_COMPRA: { id: PagoCompra; nombre: string }[] = [
   { id: "caja", nombre: "Efectivo de la caja" },
   { id: "efectivo", nombre: "Efectivo (otro)" },
-  { id: "tarjeta", nombre: "Tarjeta" },
-  { id: "transferencia", nombre: "Transferencia / Nequi" },
+  { id: "tarjeta", nombre: "Bold (tarjeta o transferencia)" },
+  { id: "transferencia", nombre: "Nequi" },
   { id: "socio", nombre: "Lo pagó un socio" },
   { id: "fondo", nombre: "Fondo de inversión" },
 ];
@@ -60,7 +60,7 @@ export interface Compra {
   socio: { nombre: string } | null;
   /** Parte que puso un socio (el resto salió de pagado_con). */
   monto_socio: number | null;
-  compra_items: { cantidad: number; costo_total: number; insumos: { nombre: string; unidad: Unidad } | null }[];
+  compra_items: { insumo_id: number; cantidad: number; costo_total: number; insumos: { nombre: string; unidad: Unidad } | null }[];
   /** Equipos y utensilios de la compra (gastos de inversión, no inventario). */
   equipos: { monto: number; descripcion: string | null }[];
 }
