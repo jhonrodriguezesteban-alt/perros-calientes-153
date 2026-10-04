@@ -7,11 +7,12 @@ import { Avisos, useAvisos } from "@/components/aviso";
 import { Modal } from "@/components/modal";
 import { nuevoIdVenta } from "@/lib/cola-ventas";
 import { cantidadInsumo, cop, horaBogota } from "@/lib/formato";
-import { agregarLinea, resumenPedido, totalPedido } from "@/lib/pedido";
+import { agregarLinea, gruposDe, resumenPedido, totalPedido } from "@/lib/pedido";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import type { AlertaStock, Catalogo, LineaPedido, MetodoPago, Pago, Perfil, Producto, Turno } from "@/lib/tipos";
 import { ModalCobro } from "./modal-cobro";
 import { ModalPerro } from "./modal-perro";
+import { ModalSabor } from "./modal-sabor";
 import { ModalSolicitar } from "./modal-solicitar";
 import { Logo } from "@/components/logo";
 import { ModalCaja, type Vista as VistaCaja } from "./modal-caja";
@@ -52,6 +53,8 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   // El pedido en curso sobrevive a una recarga o a que se apague la pantalla.
   const [lineas, setLineas] = useState<LineaPedido[]>(() => leerLocal<LineaPedido[]>(CLAVE_PEDIDO) ?? []);
   const [armando, setArmando] = useState<{ producto: Producto; linea?: LineaPedido } | null>(null);
+  /** Bebida con sabores esperando que se elija el sabor. */
+  const [eligiendoSabor, setEligiendoSabor] = useState<{ producto: Producto; cantidad: number; linea?: LineaPedido } | null>(null);
   const [cobrando, setCobrando] = useState<MetodoPago | null>(null);
   const [verVentas, setVerVentas] = useState(false);
   const [verTurno, setVerTurno] = useState(false);
@@ -110,9 +113,21 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   const enPedido = (productoId: number) =>
     lineas.filter((l) => l.producto.id === productoId).reduce((s, l) => s + l.cantidad, 0);
 
+  // Bebida: si tiene sabores, se pregunta cuál (cada sabor descuenta su insumo)
+  const pedirBebida = (b: Producto, cantidad = 1) => {
+    if (gruposDe(b).length > 0) setEligiendoSabor({ producto: b, cantidad });
+    else setLineas((ls) => agregarLinea(ls, b, [], cantidad));
+  };
+
   const tocarProducto = (p: Producto) => {
-    if (p.toppings.length > 0) setArmando({ producto: p });
+    if (p.tipo === "bebida") pedirBebida(p);
+    else if (p.toppings.length > 0) setArmando({ producto: p });
     else setLineas((ls) => agregarLinea(ls, p, []));
+  };
+
+  const editarLinea = (l: LineaPedido) => {
+    if (l.producto.tipo === "bebida") setEligiendoSabor({ producto: l.producto, cantidad: l.cantidad, linea: l });
+    else setArmando({ producto: l.producto, linea: l });
   };
 
   const cambiarCantidad = (clave: string, delta: number) =>
@@ -246,7 +261,7 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
                     </h2>
                     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                       {productos.map((p) =>
-                        p.toppings.length > 0 ? (
+                        p.toppings.length > 0 && p.tipo !== "bebida" ? (
                           <TarjetaPerro key={p.id} producto={p} cantidad={enPedido(p.id)} onClick={() => tocarProducto(p)} />
                         ) : (
                           <TarjetaSimple key={p.id} producto={p} cantidad={enPedido(p.id)} onClick={() => tocarProducto(p)} />
@@ -266,8 +281,8 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
             lineas={lineas}
             bebidas={bebidas}
             alCambiarCantidad={cambiarCantidad}
-            alEditar={(l) => setArmando({ producto: l.producto, linea: l })}
-            alAgregarBebida={(b) => setLineas((ls) => agregarLinea(ls, b, []))}
+            alEditar={editarLinea}
+            alAgregarBebida={(b) => pedirBebida(b)}
             alVaciar={() => setLineas([])}
             alCobrar={cobrar}
           />
@@ -290,8 +305,8 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
               lineas={lineas}
               bebidas={bebidas}
               alCambiarCantidad={cambiarCantidad}
-              alEditar={(l) => setArmando({ producto: l.producto, linea: l })}
-              alAgregarBebida={(b) => setLineas((ls) => agregarLinea(ls, b, []))}
+              alEditar={editarLinea}
+              alAgregarBebida={(b) => pedirBebida(b)}
               alVaciar={() => setLineas([])}
               alCobrar={cobrar}
             />
@@ -309,9 +324,24 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
             setLineas((ls) => {
               const sinEditada = armando.linea ? ls.filter((l) => l.clave !== armando.linea!.clave) : ls;
               const conPerro = agregarLinea(sinEditada, armando.producto, toppings, cantidad);
-              return bebida ? agregarLinea(conPerro, bebida, [], cantidad) : conPerro;
+              return bebida && gruposDe(bebida).length === 0 ? agregarLinea(conPerro, bebida, [], cantidad) : conPerro;
             });
             setArmando(null);
+            if (bebida && gruposDe(bebida).length > 0) setEligiendoSabor({ producto: bebida, cantidad });
+          }}
+        />
+      )}
+
+      {eligiendoSabor && (
+        <ModalSabor
+          producto={eligiendoSabor.producto}
+          cantidad={eligiendoSabor.cantidad}
+          lineaEditada={eligiendoSabor.linea}
+          alCerrar={() => setEligiendoSabor(null)}
+          alElegir={(sabor) => {
+            const { producto, cantidad, linea } = eligiendoSabor;
+            setLineas((ls) => agregarLinea(linea ? ls.filter((l) => l.clave !== linea.clave) : ls, producto, [sabor], cantidad));
+            setEligiendoSabor(null);
           }}
         />
       )}
@@ -429,6 +459,7 @@ function TarjetaSimple({ producto, cantidad, onClick }: { producto: Producto; ca
     >
       <Contador cantidad={cantidad} />
       <span className="pr-10 font-titulo text-2xl font-extrabold leading-tight">{producto.nombre}</span>
+      {producto.toppings.length > 0 && <span className="text-sm text-cafe-700">Toca para elegir el sabor</span>}
       <span className="numeros mt-3 font-titulo text-3xl font-extrabold text-rojo">{cop(producto.precio)}</span>
     </button>
   );

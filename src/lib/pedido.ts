@@ -40,6 +40,8 @@ export function resumenPedido(lineas: LineaPedido[]) {
 export function describirLinea(linea: LineaPedido) {
   const { producto } = linea;
   if (producto.toppings.length === 0) return "";
+  // Bebida: el sabor ("Gaseosa personal · Pepsi" → "Pepsi")
+  if (producto.tipo === "bebida") return linea.toppings.map((t) => t.nombre.split(" · ").pop()).join(", ");
   if (linea.toppings.length === 0) return "Sin toppings";
 
   const elegidos = new Set(linea.toppings.map((t) => t.topping_id));
