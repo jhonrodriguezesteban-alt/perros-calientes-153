@@ -10,7 +10,6 @@ import type { ResumenDia, RetiroCaja, Turno } from "@/lib/tipos";
 
 export type Vista = "inicio" | "abrir" | "retiro" | "finalizar" | "base";
 
-const MOTIVOS = ["Entrega a socio", "Pago a proveedor", "Compra de insumos", "Pago a empleada"];
 
 async function obtenerRetiros() {
   const { data, error } = await supabaseNavegador().rpc("retiros_de_hoy");
@@ -329,25 +328,97 @@ const fechaHora = new Intl.DateTimeFormat("es-CO", {
   timeZone: "America/Bogota",
 });
 
+type TipoRetiro = "compra" | "gasto" | "vale" | "entrega" | "otro";
+
+const TIPOS_RETIRO: { id: TipoRetiro; nombre: string; ayuda: string }[] = [
+  { id: "compra", nombre: "Compra de insumos", ayuda: "Queda en Compras y suma al inventario" },
+  { id: "gasto", nombre: "Otro gasto", ayuda: "Aseo, transporte, arreglos…" },
+  { id: "vale", nombre: "Vale", ayuda: "Adelanto de sueldo" },
+  { id: "entrega", nombre: "Entrega a socio", ayuda: "Plata que se lleva un socio" },
+  { id: "otro", nombre: "Otro", ayuda: "Los socios lo registran después" },
+];
+
+interface InsumoPos {
+  insumo_id: number;
+  nombre: string;
+  unidad: "g" | "ml" | "und";
+}
+
+interface RenglonCompra {
+  clave: number;
+  insumo_id: number | null;
+  cantidad: string;
+  valor: number | null;
+}
+
+let claveRenglon = 1;
+const renglonVacio = (): RenglonCompra => ({ clave: claveRenglon++, insumo_id: null, cantidad: "", valor: null });
+const UNIDAD: Record<InsumoPos["unidad"], string> = { g: "gramos", ml: "ml", und: "unidades" };
+
+/** Sacar efectivo diciendo para qué: queda registrado como compra, gasto o vale con ese mismo retiro. */
 function FormRetiro({ alVolver, alListo }: { alVolver: () => void; alListo: (mensaje: string, detalle?: string) => void }) {
+  const [tipo, setTipo] = useState<TipoRetiro | null>(null);
   const [monto, setMonto] = useState<number | null>(null);
   const [tercero, setTercero] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [categoria, setCategoria] = useState<number | null>(null);
+  const [renglones, setRenglones] = useState<RenglonCompra[]>([renglonVacio()]);
+  const [insumos, setInsumos] = useState<InsumoPos[]>([]);
+  const [categorias, setCategorias] = useState<{ id: number; nombre: string }[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const listo = !!monto && tercero.trim() !== "";
+
+  useEffect(() => {
+    const supabase = supabaseNavegador();
+    if (tipo === "compra" && insumos.length === 0) {
+      void supabase.rpc("insumos_para_pedido").then(({ data }) => data && setInsumos(data as InsumoPos[]));
+    }
+    if (tipo === "gasto" && categorias.length === 0) {
+      void supabase.rpc("categorias_gasto_pos").then(({ data }) => data && setCategorias(data as { id: number; nombre: string }[]));
+    }
+  }, [tipo, insumos.length, categorias.length]);
+
+  const totalCompra = renglones.reduce((s, r) => s + (r.valor ?? 0), 0);
+  const valor = tipo === "compra" ? totalCompra : (monto ?? 0);
+  const cambiar = (clave: number, c: Partial<RenglonCompra>) => setRenglones((rs) => rs.map((r) => (r.clave === clave ? { ...r, ...c } : r)));
 
   const guardar = async () => {
-    setGuardando(true);
     setError(null);
-    const { error } = await supabaseNavegador().rpc("registrar_retiro", {
-      p_monto: monto,
-      p_tercero: tercero.trim(),
-      p_motivo: motivo.trim() || null,
+    if (!tipo) return setError("Elige para qué es la plata.");
+    if (!valor) return setError(tipo === "compra" ? "Escribe cuánto costó cada cosa." : "Escribe cuánto efectivo sale.");
+    if (tipo !== "vale" && !tercero.trim()) return setError(tipo === "compra" ? "¿Dónde se compró?" : "¿A nombre de quién sale?");
+    if (tipo === "vale" && !tercero.trim()) return setError("¿Para quién es el vale?");
+    const items = renglones.filter((r) => r.insumo_id || r.valor || r.cantidad.trim());
+    if (tipo === "compra") {
+      if (items.length === 0) return setError("Agrega lo que se compró.");
+      for (const r of items) {
+        const nombre = insumos.find((i) => i.insumo_id === r.insumo_id)?.nombre;
+        if (!r.insumo_id) return setError("Elige qué producto se compró en cada renglón.");
+        if (!(Number(r.cantidad.replace(",", ".")) > 0)) return setError(`Falta la cantidad de ${nombre}.`);
+        if (!r.valor) return setError(`Falta cuánto costó ${nombre}.`);
+      }
+    }
+    if (tipo === "gasto" && !categoria) return setError("Elige qué tipo de gasto es.");
+    if ((tipo === "gasto" || tipo === "otro") && !motivo.trim()) return setError("Escribe qué se compró o para qué es.");
+    setGuardando(true);
+    const { error } = await supabaseNavegador().rpc("registrar_retiro_detallado", {
+      p: {
+        tipo,
+        monto: valor,
+        tercero: tercero.trim(),
+        persona: tipo === "vale" ? tercero.trim() : null,
+        motivo: motivo.trim() || null,
+        categoria_id: categoria,
+        items: items.map((r) => ({ insumo_id: r.insumo_id, cantidad: Number(r.cantidad.replace(",", ".")), costo_total: r.valor })),
+      },
     });
     setGuardando(false);
-    if (error) setError(mensajeDe(error));
-    else alListo(`Retiro de ${cop(monto!)} registrado`, `A nombre de ${tercero.trim()}`);
+    if (error) return setError(mensajeDe(error));
+    const nombreTipo = TIPOS_RETIRO.find((t) => t.id === tipo)!.nombre;
+    alListo(
+      `Retiro de ${cop(valor)} registrado`,
+      tipo === "otro" ? `A nombre de ${tercero.trim()}` : `${nombreTipo} · ${tercero.trim()}${tipo === "compra" ? " · ya quedó en Compras" : ""}`,
+    );
   };
 
   return (
@@ -356,44 +427,140 @@ function FormRetiro({ alVolver, alListo }: { alVolver: () => void; alListo: (men
       alCerrar={alVolver}
       titulo="Retirar efectivo"
       pie={
-        <BotonConfirmar onClick={guardar} disabled={guardando || !listo} guardando={guardando}>
-          {monto ? `Sacar ${cop(monto)} de la caja` : "Registrar retiro"}
+        <BotonConfirmar onClick={guardar} disabled={guardando || !tipo || !valor} guardando={guardando}>
+          {valor ? `Sacar ${cop(valor)} de la caja` : "Registrar retiro"}
         </BotonConfirmar>
       }
     >
       <Volver onClick={alVolver} />
-      <EntradaDinero etiqueta="¿Cuánto efectivo sale?" valor={monto} alCambiar={setMonto} autoFocus />
-      <label htmlFor="retiro-tercero" className="mb-2 mt-5 block font-etiqueta font-semibold">
-        ¿A nombre de quién?
-      </label>
-      <input
-        id="retiro-tercero"
-        value={tercero}
-        onChange={(e) => setTercero(e.target.value)}
-        placeholder="Ej. Jhon, proveedor de gaseosas…"
-        autoComplete="off"
-        className="h-14 w-full rounded-2xl bg-crema px-4 text-lg ring-2 ring-cafe-100 outline-none focus:ring-cafe"
-      />
-      <p className="mb-2 mt-5 font-etiqueta font-semibold">¿Para qué? (opcional)</p>
-      <div className="mb-2 flex flex-wrap gap-2">
-        {MOTIVOS.map((m) => (
+      <p className="mb-2 font-etiqueta font-semibold">¿Para qué es la plata?</p>
+      <div className="grid grid-cols-2 gap-2">
+        {TIPOS_RETIRO.map((t) => (
           <button
-            key={m}
-            onClick={() => setMotivo(m)}
-            className={`min-h-12 rounded-xl px-4 font-etiqueta text-sm font-semibold ${
-              motivo === m ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
-            }`}
+            key={t.id}
+            onClick={() => setTipo(t.id)}
+            className={`min-h-16 rounded-2xl px-3 py-2 text-left ${tipo === t.id ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"}`}
           >
-            {m}
+            <span className="block font-etiqueta font-extrabold">{t.nombre}</span>
+            <span className={`block text-xs ${tipo === t.id ? "text-crema/80" : "text-cafe-700"}`}>{t.ayuda}</span>
           </button>
         ))}
       </div>
-      <input
-        value={motivo}
-        onChange={(e) => setMotivo(e.target.value)}
-        placeholder="U otro motivo…"
-        className="h-12 w-full rounded-2xl bg-crema px-4 ring-2 ring-cafe-100 outline-none focus:ring-cafe"
-      />
+
+      {tipo && (
+        <div className="mt-5 space-y-4">
+          <label className="block">
+            <span className="mb-2 block font-etiqueta font-semibold">
+              {tipo === "compra" ? "¿Dónde se compró?" : tipo === "vale" ? "¿Para quién es el vale?" : tipo === "entrega" ? "¿A qué socio?" : "¿A nombre de quién?"}
+            </span>
+            <input
+              value={tercero}
+              onChange={(e) => setTercero(e.target.value)}
+              placeholder={tipo === "compra" ? "Ej. Ara, tienda de la esquina" : tipo === "vale" ? "Ej. Andrea" : tipo === "entrega" ? "Ej. Jhon" : "Ej. Tienda, mensajero…"}
+              autoComplete="off"
+              className="h-14 w-full rounded-2xl bg-crema px-4 text-lg ring-2 ring-cafe-100 outline-none focus:ring-cafe"
+            />
+          </label>
+
+          {tipo === "compra" ? (
+            <div className="space-y-3">
+              <p className="font-etiqueta font-semibold">¿Qué se compró?</p>
+              {renglones.map((r) => {
+                const ins = insumos.find((i) => i.insumo_id === r.insumo_id);
+                return (
+                  <div key={r.clave} className="space-y-2 rounded-2xl bg-crema-200/60 p-3">
+                    <div className="flex gap-2">
+                      <select
+                        value={r.insumo_id ?? ""}
+                        onChange={(e) => cambiar(r.clave, { insumo_id: e.target.value ? Number(e.target.value) : null })}
+                        className="h-12 min-w-0 flex-1 rounded-xl bg-crema px-3 ring-2 ring-cafe-100 outline-none focus:ring-cafe"
+                      >
+                        <option value="">{insumos.length ? "Elige el producto…" : "Cargando…"}</option>
+                        {insumos.map((i) => (
+                          <option key={i.insumo_id} value={i.insumo_id}>
+                            {i.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        aria-label="Quitar"
+                        onClick={() => setRenglones((rs) => (rs.length > 1 ? rs.filter((x) => x.clave !== r.clave) : [renglonVacio()]))}
+                        className="grid size-12 shrink-0 place-items-center rounded-xl text-cafe-700 active:bg-cafe-100"
+                      >
+                        <Trash2 className="size-5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        inputMode="decimal"
+                        value={r.cantidad}
+                        onChange={(e) => cambiar(r.clave, { cantidad: e.target.value.replace(/[^\d.,]/g, "") })}
+                        placeholder={ins ? `Cantidad (${UNIDAD[ins.unidad]})` : "Cantidad"}
+                        className="h-12 rounded-xl bg-crema px-3 ring-2 ring-cafe-100 outline-none focus:ring-cafe"
+                      />
+                      <input
+                        inputMode="numeric"
+                        value={r.valor === null ? "" : cop(r.valor)}
+                        onChange={(e) => {
+                          const d = e.target.value.replace(/\D/g, "");
+                          cambiar(r.clave, { valor: d === "" ? null : Number(d) });
+                        }}
+                        placeholder="Valor $0"
+                        className="numeros h-12 rounded-xl bg-crema px-3 font-semibold ring-2 ring-cafe-100 outline-none focus:ring-cafe"
+                      />
+                    </div>
+                    {ins && ins.unidad !== "und" && <p className="text-xs text-cafe-700">Escribe la cantidad en {UNIDAD[ins.unidad]} (ej. 1 kilo = 1000).</p>}
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => setRenglones((rs) => [...rs, renglonVacio()])}
+                className="min-h-12 w-full rounded-2xl font-etiqueta font-semibold ring-2 ring-cafe-100 active:bg-cafe-100"
+              >
+                + Agregar otro producto
+              </button>
+              <p className="text-right font-etiqueta font-extrabold">
+                Total: <span className="numeros text-rojo">{cop(totalCompra)}</span>
+              </p>
+            </div>
+          ) : (
+            <EntradaDinero etiqueta="¿Cuánto efectivo sale?" valor={monto} alCambiar={setMonto} pequeno />
+          )}
+
+          {tipo === "gasto" && (
+            <div>
+              <p className="mb-2 font-etiqueta font-semibold">¿Qué tipo de gasto?</p>
+              <div className="flex flex-wrap gap-2">
+                {categorias.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setCategoria(c.id)}
+                    className={`min-h-12 rounded-xl px-4 font-etiqueta text-sm font-semibold ${
+                      categoria === c.id ? "bg-cafe text-crema" : "ring-2 ring-cafe-100 active:bg-cafe-100"
+                    }`}
+                  >
+                    {c.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tipo !== "compra" && (
+            <label className="block">
+              <span className="mb-2 block font-etiqueta font-semibold">
+                {tipo === "gasto" || tipo === "otro" ? "¿Qué se compró o para qué es?" : "Nota (opcional)"}
+              </span>
+              <input
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder={tipo === "gasto" ? "Ej. Jabón y bolsas de basura" : ""}
+                className="h-12 w-full rounded-2xl bg-crema px-4 ring-2 ring-cafe-100 outline-none focus:ring-cafe"
+              />
+            </label>
+          )}
+        </div>
+      )}
       {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}
     </Modal>
   );
