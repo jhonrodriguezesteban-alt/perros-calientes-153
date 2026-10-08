@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import { EyeOff, ListChecks, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/modal";
 import { db, FAMILIAS, fechaCorta, type Familia, type Insumo } from "@/lib/admin";
@@ -70,6 +70,38 @@ export function InventarioAdmin() {
   const [familia, setFamilia] = useState<Familia | null>(null);
   const [editando, setEditando] = useState<Insumo | "nuevo" | null>(null);
   const [ajustando, setAjustando] = useState<Insumo | null>(null);
+  /** Modo "Editar mínimos": cambios por insumo (mínimo y si se oculta a la empleada). */
+  const [minimos, setMinimos] = useState<Map<number, { minimo: string; oculto: boolean }> | null>(null);
+  const [guardandoMinimos, setGuardandoMinimos] = useState(false);
+  const [errorMinimos, setErrorMinimos] = useState<string | null>(null);
+
+  const editarMinimos = () =>
+    setMinimos(new Map((data?.insumos ?? []).map((i) => [i.id, { minimo: String(i.stock_minimo), oculto: !!i.stock_oculto }])));
+
+  const guardarMinimos = async () => {
+    if (!minimos || !data) return;
+    setErrorMinimos(null);
+    const cambios: { id: number; minimo: number; oculto: boolean }[] = [];
+    for (const ins of data.insumos) {
+      const m = minimos.get(ins.id);
+      if (!m) continue;
+      const minimo = aNumero(m.minimo);
+      if (minimo === null || minimo < 0) return setErrorMinimos(`Revisa el mínimo de ${ins.nombre}.`);
+      if (minimo !== ins.stock_minimo || m.oculto !== !!ins.stock_oculto) cambios.push({ id: ins.id, minimo, oculto: m.oculto });
+    }
+    setGuardandoMinimos(true);
+    try {
+      for (const c of cambios) {
+        exigir(await db().from("insumos").update({ stock_minimo: c.minimo, stock_oculto: c.oculto }).eq("id", c.id));
+      }
+      setMinimos(null);
+      recargar();
+    } catch (e) {
+      setErrorMinimos(mensajeError(e));
+    } finally {
+      setGuardandoMinimos(false);
+    }
+  };
 
   const insumos = useMemo(
     () =>
@@ -133,7 +165,28 @@ export function InventarioAdmin() {
               <Filtro activo={mostrarInactivos} onClick={() => setMostrarInactivos((v) => !v)}>
                 Ver inactivos
               </Filtro>
+              {minimos ? (
+                <span className="ml-auto flex flex-wrap gap-2">
+                  <Boton variante="suave" className="min-h-10 px-3 text-sm" onClick={() => setMinimos(null)}>
+                    Cancelar
+                  </Boton>
+                  <Boton className="min-h-10 px-3 text-sm" onClick={() => void guardarMinimos()} cargando={guardandoMinimos}>
+                    Guardar mínimos
+                  </Boton>
+                </span>
+              ) : (
+                <Boton variante="suave" className="ml-auto min-h-10 px-3 text-sm" onClick={editarMinimos}>
+                  <ListChecks className="size-4" /> Editar mínimos
+                </Boton>
+              )}
             </div>
+            {minimos && (
+              <p className="mb-3 rounded-2xl bg-mostaza-100/60 px-4 py-3 text-sm ring-2 ring-mostaza">
+                Escribe el <strong>mínimo</strong> de cada insumo: cuando quede eso o menos, a Andrea le sale el aviso de pedirlo. Marca{" "}
+                <strong>Ocultar</strong> en los que no quieres que vea cuánto queda (solo le sale el aviso).
+              </p>
+            )}
+            {errorMinimos && <MensajeError>{errorMinimos}</MensajeError>}
 
             {insumos.length === 0 ? (
               <Vacio>No hay insumos con ese filtro.</Vacio>
@@ -145,6 +198,7 @@ export function InventarioAdmin() {
                       <th className="px-2 py-2">Insumo</th>
                       <th className="px-2 py-2 text-right">Hay</th>
                       <th className="px-2 py-2 text-right">Mínimo</th>
+                      {minimos && <th className="px-2 py-2 text-center">Ocultar a Andrea</th>}
                       <th className="px-2 py-2 text-right">Costo</th>
                       <th className="px-2 py-2 text-right">Valor</th>
                       <th className="px-2 py-2" />
@@ -157,7 +211,7 @@ export function InventarioAdmin() {
                     return (
                   <tbody key={f.id}>
                     <tr>
-                      <td colSpan={6} className="px-2 pb-2 pt-6">
+                      <td colSpan={minimos ? 7 : 6} className="px-2 pb-2 pt-6">
                         <div className="flex items-baseline justify-between gap-3 rounded-xl bg-cafe px-4 py-2 text-crema">
                           <span className="font-etiqueta font-extrabold uppercase tracking-wide">
                             {f.nombre} <span className="font-semibold normal-case text-cafe-300">· {grupo.length}</span>
@@ -175,13 +229,47 @@ export function InventarioAdmin() {
                             <div className="mt-0.5 flex flex-wrap gap-1">
                               {bajo && i.activo && <Insignia tono={i.stock_actual < 0 ? "peligro" : "alerta"}>{i.stock_actual < 0 ? "Negativo: falta registrar compra" : "Reordenar"}</Insignia>}
                               {i.es_estimado && <Insignia>Costo estimado</Insignia>}
+                              {i.stock_oculto && (
+                                <Insignia>
+                                  <EyeOff className="mr-1 inline size-3" />
+                                  Oculto a Andrea
+                                </Insignia>
+                              )}
                               {!i.activo && <Insignia>Inactivo</Insignia>}
                             </div>
                           </td>
                           <td className={`numeros px-2 py-3 text-right font-semibold ${bajo ? "text-rojo" : ""}`}>
                             {cantidadInsumo(i.stock_actual, i.unidad)}
                           </td>
-                          <td className="numeros px-2 py-3 text-right text-cafe-700">{cantidadInsumo(i.stock_minimo, i.unidad)}</td>
+                          {minimos ? (
+                            <>
+                              <td className="px-2 py-2 text-right">
+                                <span className="inline-flex items-center gap-1">
+                                  <EntradaNumero
+                                    valor={minimos.get(i.id)?.minimo ?? ""}
+                                    alCambiar={(v) =>
+                                      setMinimos((m) => new Map(m).set(i.id, { minimo: v, oculto: m?.get(i.id)?.oculto ?? false }))
+                                    }
+                                    className="!h-10 !w-24 text-right"
+                                  />
+                                  <span className="text-xs text-cafe-700">{i.unidad}</span>
+                                </span>
+                              </td>
+                              <td className="px-2 py-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Ocultar ${i.nombre} a Andrea`}
+                                  className="size-5 accent-cafe"
+                                  checked={minimos.get(i.id)?.oculto ?? false}
+                                  onChange={(e) =>
+                                    setMinimos((m) => new Map(m).set(i.id, { minimo: m?.get(i.id)?.minimo ?? "", oculto: e.target.checked }))
+                                  }
+                                />
+                              </td>
+                            </>
+                          ) : (
+                            <td className="numeros px-2 py-3 text-right text-cafe-700">{cantidadInsumo(i.stock_minimo, i.unidad)}</td>
+                          )}
                           <td className="numeros px-2 py-3 text-right">{costoTexto(i)}</td>
                           <td className="numeros px-2 py-3 text-right">{cop(Math.max(i.stock_actual, 0) * i.costo_unitario)}</td>
                           <td className="px-2 py-3">
