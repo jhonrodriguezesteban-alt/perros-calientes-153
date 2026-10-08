@@ -1,10 +1,11 @@
 "use client";
 
-import { ClipboardList, ClipboardPlus, LayoutDashboard, LogOut, PackageOpen, ShoppingBag, Store, Wifi, WifiOff } from "lucide-react";
+import { ChefHat, ClipboardList, ClipboardPlus, LayoutDashboard, LogOut, PackageOpen, ShoppingBag, Store, Wifi, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avisos, useAvisos } from "@/components/aviso";
 import { Modal } from "@/components/modal";
+import { cargarPreparaciones, ModalPrepararTanda, type Preparacion } from "@/components/preparar-tanda";
 import { nuevoIdVenta } from "@/lib/cola-ventas";
 import { cantidadInsumo, cop, horaBogota } from "@/lib/formato";
 import { agregarLinea, gruposDe, resumenPedido, totalPedido } from "@/lib/pedido";
@@ -62,6 +63,13 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
   const [verAlertas, setVerAlertas] = useState(false);
   // undefined = cerrado; null = abierto sin insumo elegido; número = insumo preseleccionado
   const [pidiendo, setPidiendo] = useState<number | null | undefined>(undefined);
+  /** Preparaciones (salsa de huevo…): null = eligiendo cuál. */
+  const [preparaciones, setPreparaciones] = useState<Preparacion[] | null>(null);
+  const [preparando, setPreparando] = useState<Preparacion | null>(null);
+  const abrirPreparar = () =>
+    void cargarPreparaciones()
+      .then((ps) => (ps.length === 1 ? setPreparando(ps[0]) : setPreparaciones(ps)))
+      .catch(() => avisar("error", "No se pudieron cargar las preparaciones", "Revisa el internet."));
   const [verPedidoMovil, setVerPedidoMovil] = useState(false);
   const [turno, setTurno] = useState<Turno | null | undefined>(undefined);
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
@@ -202,6 +210,10 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
               <span className="hidden lg:inline">por reordenar</span>
             </Chip>
           )}
+          <Chip onClick={abrirPreparar} etiqueta="Preparar">
+            <ChefHat className="size-5" />
+            <span className="hidden lg:inline">Preparar</span>
+          </Chip>
           <Chip onClick={() => setPidiendo(null)} etiqueta="Pedir insumo">
             <ClipboardPlus className="size-5" />
             <span className="hidden lg:inline">Pedir</span>
@@ -417,6 +429,39 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
           alEnviar={(m) => {
             setPidiendo(undefined);
             avisar("exito", m, "Te avisamos cuando lo compren.");
+          }}
+        />
+      )}
+
+      {preparaciones && (
+        <Modal abierto alCerrar={() => setPreparaciones(null)} titulo="¿Qué vas a preparar?">
+          {preparaciones.length === 0 ? (
+            <p className="text-cafe-700">Todavía no hay preparaciones.</p>
+          ) : (
+            <div className="grid gap-2">
+              {preparaciones.map((p) => (
+                <button
+                  key={p.insumo_id}
+                  onClick={() => {
+                    setPreparaciones(null);
+                    setPreparando(p);
+                  }}
+                  className="min-h-14 rounded-2xl px-4 text-left font-etiqueta text-lg font-semibold ring-2 ring-cafe-100 active:bg-cafe-100"
+                >
+                  {p.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+      {preparando && (
+        <ModalPrepararTanda
+          preparacion={preparando}
+          alCerrar={() => setPreparando(null)}
+          alListo={(m) => {
+            setPreparando(null);
+            avisar("exito", m, "Ya quedó en el inventario.");
           }}
         />
       )}
