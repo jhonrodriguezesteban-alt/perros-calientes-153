@@ -31,6 +31,7 @@ export function ModalInsumo({
   const [nota, setNota] = useState(insumo?.nota ?? "");
   const [estimado, setEstimado] = useState(insumo?.es_estimado ?? false);
   const [activo, setActivo] = useState(insumo?.activo ?? true);
+  const [oculto, setOculto] = useState(insumo?.stock_oculto ?? false);
   const [familia, setFamilia] = useState<Familia>(insumo?.familia ?? familiaInicial ?? "perro");
   const [motivo, setMotivo] = useState("");
   const [paquetePrecio, setPaquetePrecio] = useState<number | null>(null);
@@ -60,6 +61,7 @@ export function ModalInsumo({
         es_estimado: estimado,
         activo,
         familia,
+        stock_oculto: oculto,
       };
       let guardado: Insumo;
       if (insumo) {
@@ -161,6 +163,10 @@ export function ModalInsumo({
         <label className="flex items-center gap-3 font-etiqueta text-sm font-semibold">
           <input type="checkbox" className="size-5 accent-cafe" checked={estimado} onChange={(e) => setEstimado(e.target.checked)} />
           El costo es estimado (falta confirmar)
+        </label>
+        <label className="flex items-center gap-3 font-etiqueta text-sm font-semibold sm:col-span-2">
+          <input type="checkbox" className="size-5 accent-cafe" checked={oculto} onChange={(e) => setOculto(e.target.checked)} />
+          Ocultar la cantidad a la empleada (solo le sale el aviso de pedir)
         </label>
         {insumo && (
           <label className="flex items-center gap-3 font-etiqueta text-sm font-semibold">

@@ -99,8 +99,9 @@ export interface AlertaStock {
   insumo_id: number;
   nombre: string;
   unidad: "g" | "ml" | "und";
-  stock_actual: number;
-  stock_minimo: number;
+  /** null si los socios lo ocultan a la empleada (pan, salchicha). */
+  stock_actual: number | null;
+  stock_minimo: number | null;
 }
 
 /** Resumen que guarda "Finalizar día" (turnos.resumen). */
