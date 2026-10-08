@@ -6,6 +6,7 @@ import { Modal } from "@/components/modal";
 import { db, FAMILIAS, fechaCorta, type Familia, type Insumo } from "@/lib/admin";
 import { cantidadInsumo, cop } from "@/lib/formato";
 import { ModalInsumo } from "./modal-insumo";
+import { TarjetaPreparaciones } from "./preparaciones-admin";
 import {
   aNumero,
   Boton,
@@ -293,6 +294,8 @@ export function InventarioAdmin() {
             )}
           </Tarjeta>
 
+          <TarjetaPreparaciones insumos={data.insumos} alCambiar={recargar} />
+
           <Tarjeta>
             <Subtitulo>Últimos movimientos (sin ventas)</Subtitulo>
             {data.movimientos.length === 0 ? (
@@ -303,7 +306,10 @@ export function InventarioAdmin() {
                   <li key={m.id} className="flex items-baseline justify-between gap-3 py-2">
                     <span>
                       <span className="font-etiqueta font-semibold">{m.insumos?.nombre}</span>
-                      <span className="text-cafe-700"> · {NOMBRE_MOVIMIENTO[m.tipo] ?? m.tipo}</span>
+                      <span className="text-cafe-700">
+                        {" "}
+                        · {m.nota?.startsWith("Preparación: ") ? (m.cantidad > 0 ? "Preparado" : "Usado en preparación") : (NOMBRE_MOVIMIENTO[m.tipo] ?? m.tipo)}
+                      </span>
                       {m.nota && <span className="text-cafe-300"> · {m.nota}</span>}
                     </span>
                     <span className="numeros shrink-0 text-right">
