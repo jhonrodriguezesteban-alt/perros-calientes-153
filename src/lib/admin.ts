@@ -24,6 +24,8 @@ export interface Insumo {
   es_estimado: boolean;
   nota: string | null;
   familia: Familia;
+  /** La empleada no ve cuánto queda (sí el aviso de pedir). */
+  stock_oculto?: boolean;
 }
 
 export interface Solicitud {

@@ -385,10 +385,14 @@ export function PosApp({ perfil, catalogoInicial }: { perfil: Perfil; catalogoIn
               <li key={a.insumo_id} className="flex items-center justify-between gap-3 rounded-2xl bg-mostaza-100/60 px-5 py-3 ring-2 ring-mostaza">
                 <span>
                   <span className="block font-etiqueta text-lg font-semibold">{a.nombre}</span>
-                  <span className="numeros text-cafe-700">
-                    quedan <strong className="text-cafe">{cantidadInsumo(Math.max(a.stock_actual, 0), a.unidad)}</strong> · mínimo{" "}
-                    {cantidadInsumo(a.stock_minimo, a.unidad)}
-                  </span>
+                  {a.stock_actual === null || a.stock_minimo === null ? (
+                    <span className="font-etiqueta font-semibold text-rojo">Hay que pedir</span>
+                  ) : (
+                    <span className="numeros text-cafe-700">
+                      quedan <strong className="text-cafe">{cantidadInsumo(Math.max(a.stock_actual, 0), a.unidad)}</strong> · mínimo{" "}
+                      {cantidadInsumo(a.stock_minimo, a.unidad)}
+                    </span>
+                  )}
                 </span>
                 <button
                   onClick={() => {

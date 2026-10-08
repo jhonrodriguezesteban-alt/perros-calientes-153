@@ -10,8 +10,11 @@ interface InsumoPedido {
   insumo_id: number;
   nombre: string;
   unidad: "g" | "ml" | "und";
-  stock_actual: number;
-  stock_minimo: number;
+  /** null si los socios lo ocultan a la empleada (pan, salchicha). */
+  stock_actual: number | null;
+  stock_minimo: number | null;
+  /** Ya está por debajo del mínimo: hay que pedirlo. */
+  bajo: boolean;
 }
 
 interface MiSolicitud {
@@ -77,7 +80,7 @@ export function ModalSolicitar({
     () =>
       (datos?.insumos ?? [])
         .filter((i) => i.nombre.toLowerCase().includes(busqueda.toLowerCase()))
-        .sort((a, b) => Number(b.stock_actual <= b.stock_minimo) - Number(a.stock_actual <= a.stock_minimo)),
+        .sort((a, b) => Number(b.bajo) - Number(a.bajo)),
     [datos, busqueda],
   );
 
@@ -143,7 +146,7 @@ export function ModalSolicitar({
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {filtrados.map((i) => {
-              const bajo = i.stock_actual <= i.stock_minimo;
+              const bajo = i.bajo;
               return (
                 <button
                   key={i.insumo_id}
@@ -151,7 +154,9 @@ export function ModalSolicitar({
                   className={`min-h-16 rounded-2xl px-3 py-2 text-left ${bajo ? "bg-mostaza-100 ring-2 ring-mostaza" : "bg-crema ring-2 ring-cafe-100"} active:bg-cafe-100`}
                 >
                   <span className="block font-etiqueta font-semibold leading-tight">{i.nombre}</span>
-                  <span className="text-sm text-cafe-700">quedan {cantidadInsumo(Math.max(i.stock_actual, 0), i.unidad)}</span>
+                  <span className="text-sm text-cafe-700">
+                    {i.stock_actual === null ? (bajo ? "Hay que pedir" : "") : `quedan ${cantidadInsumo(Math.max(i.stock_actual, 0), i.unidad)}`}
+                  </span>
                 </button>
               );
             })}
