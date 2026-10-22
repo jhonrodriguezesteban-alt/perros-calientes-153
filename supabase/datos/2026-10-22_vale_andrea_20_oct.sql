@@ -20,9 +20,9 @@ begin
   v_pend := least(greatest(v_pend, 0), v_vale.monto);
 
   if v_pend > 0 then
-    insert into pagos_personal (fecha, persona, tipo, monto, pagado_con, nota, retiro_id, semana, creado_en)
+    insert into pagos_personal (fecha, persona, tipo, monto, pagado_con, nota, retiro_id, semana, creado_en, registrado_por)
     values (v_vale.fecha, 'Andrea', 'vale', v_pend, v_vale.pagado_con,
-            'Parte del vale del 20-oct: cancela la primera nómina', v_vale.retiro_id, '2026-09-23', v_vale.creado_en);
+            'Parte del vale del 20-oct: cancela la primera nómina', v_vale.retiro_id, '2026-09-23', v_vale.creado_en, v_vale.registrado_por);
   end if;
   update pagos_personal
      set monto = v_vale.monto - v_pend, semana = '2026-10-12',
