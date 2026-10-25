@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude Web Builder — README hero</title>
+
+<!-- 1. Theme + language BEFORE Tailwind, so there is exactly one JIT flush. -->
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var r = document.documentElement;
+  if (q.get('theme') === 'dark') r.classList.add('dark');
+  var lang = q.get('lang') === 'es' ? 'es' : 'en';
+  r.setAttribute('lang', lang);
+  r.setAttribute('data-lang', lang);
+})();
+</script>
+
+<!-- 2. Fonts. display=block on purpose: a premature screenshot must be obviously
+     blank, never silently rendered in a fallback face.
+     Fraunces carries the WONK axis — that is the quirky high-contrast serif the
+     design references use. Families alphabetical; Fraunces axes lowercase-then-
+     uppercase, ranges in the same order, or Google 400s the request. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..900,0..100,0..1&family=JetBrains+Mono:wght@400;500&display=block">
+
+<!-- 3. Raw tokens. Every ratio below was computed OKLCH -> sRGB -> WCAG, not eyeballed.
+     html.dark (0,1,1) outranks :root (0,1,0) regardless of injection order. -->
+<style>
+  :root {
+    --c-ground: oklch(96.5% 0.010 80);   /* #F7F3EC bone            */
+    --c-panel:  oklch(65.5% 0.210 38);   /* #F5510D                 */
+    --c-ink:    oklch(16%   0.030 45);   /* #180904  5.61:1 on panel */
+    --c-cream:  oklch(96.5% 0.014 75);   /* #F9F2E9  3.13:1 large    */
+    --c-chip:   oklch(19%   0.032 45);   /* #200F07 16.76:1 w/ cream */
+    --c-mark:   oklch(24.5% 0.075 42);   /* #3C1000 sunburst         */
+    --h1-weight: 700; --h1-track: -0.028em;
+  }
+  /* Dark is NOT an inversion: different ground, REDUCED accent chroma
+     (0.210 -> 0.180), lighter headline weight, looser tracking. */
+  html.dark {
+    --c-ground: oklch(15.5% 0.014 55);   /* #110B07 */
+    --c-panel:  oklch(61.5% 0.180 38);   /* #DA5224  4.91:1 / 3.52:1 */
+    --c-ink:    oklch(15%   0.028 45);
+    --c-cream:  oklch(95.5% 0.013 75);
+    --c-chip:   oklch(17.5% 0.028 45);
+    --c-mark:   oklch(23.5% 0.065 42);
+    --h1-weight: 600; --h1-track: -0.018em;
+  }
+  html, body { margin: 0; padding: 0; background: var(--c-ground); }
+  body { font-family: Archivo, sans-serif; -webkit-font-smoothing: antialiased; }
+  .display { font-family: Fraunces, Georgia, serif;
+             font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  /* Language switch is pure CSS — zero DOM mutation after load, so Tailwind's
+     MutationObserver never re-flushes and the readiness gate cannot go stale. */
+  html[data-lang="en"] [data-lang="es"] { display: none !important; }
+  html[data-lang="es"] [data-lang="en"] { display: none !important; }
+</style>
+
+<style type="text/tailwindcss">
+  @theme {
+    --color-ground: var(--c-ground);
+    --color-panel:  var(--c-panel);
+    --color-ink:    var(--c-ink);
+    --color-cream:  var(--c-cream);
+    --color-chip:   var(--c-chip);
+    --color-mark:   var(--c-mark);
+  }
+</style>
+
+<!-- Tailwind v4 in-browser JIT, EXACT pin (not @4 — floating breaks determinism). -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
+</head>
+
+<body>
+<span id="tw-sentinel" class="pl-[37px] absolute opacity-0 pointer-events-none"></span>
+
+<section id="hero" class="relative w-[1280px] h-[640px] bg-ground p-[30px]">
+
+  <div id="panel" class="relative h-full w-full overflow-hidden rounded-[22px] bg-panel
+                         px-[52px] py-[40px] flex flex-col justify-between text-ink">
+
+    <!-- sunburst, bleeding off the bottom-right corner -->
+    <svg aria-hidden="true" class="pointer-events-none absolute -right-[64px] -bottom-[76px] w-[340px] h-[340px] text-mark"
+         viewBox="-180 -180 360 360" fill="currentColor">
+      <g>
+      <circle cx="0" cy="0" r="30"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(0)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(30)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(60)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(90)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(120)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(150)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(180)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(210)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(240)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(270)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(300)"/>
+      <path d="M0,0 L21,-58 L0,-158 L-21,-58 Z" transform="rotate(330)"/>
+      </g>
+    </svg>
+
+    <!-- micro-label rail -->
+    <div id="rail" class="relative flex items-baseline justify-between mono text-[12px] font-medium uppercase tracking-[0.18em]">
+      <span>Claude Web Builder</span>
+      <span><span data-lang="en">21 Skills &middot; 6 Phases &middot; 0 Lines You Write</span><span data-lang="es">21 Skills &middot; 6 Fases &middot; 0 L&iacute;neas Que Escribes</span></span>
+      <span>Tododeia &copy;2026</span>
+    </div>
+
+    <!-- headline -->
+    <h1 id="hero-h1" class="display relative m-0 text-[106px] leading-[0.92]"
+        style="font-weight:var(--h1-weight);letter-spacing:var(--h1-track);">
+      <span data-lang="en">Describe your business.<br><span class="text-cream">Claude</span> builds the site.</span>
+      <span data-lang="es">Describe tu negocio.<br><span class="text-cream">Claude</span> lo construye.</span>
+    </h1>
+
+    <!-- foot: terminal chip + caption -->
+    <div class="relative flex items-end gap-10">
+      <div id="chip" class="mono w-[300px] shrink-0 rounded-[10px] bg-chip px-4 py-3 text-[11px] leading-[1.85] text-cream whitespace-pre">$ claude
+<span class="opacity-60">&rsaquo; </span><span data-lang="en">Lolita&rsquo;s Bakery</span><span data-lang="es">Panader&iacute;a Lolita</span>
+<span class="inline-flex items-center gap-1.5"><svg viewBox="0 0 12 12" class="size-3 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6.4 4.6 9 10 3"/></svg><span data-lang="en">lolitas-bakery.vercel.app</span><span data-lang="es">panaderia-lolita.vercel.app</span></span></div>
+
+      <p id="caption" class="m-0 text-[24px] font-extrabold uppercase leading-[1.18] tracking-[-0.01em]">
+        <span data-lang="en">No code. No templates.<br><span class="text-cream">A live URL</span> in minutes.</span>
+        <span data-lang="es">Sin c&oacute;digo. Sin plantillas.<br><span class="text-cream">Una URL en vivo</span> en minutos.</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- ticket notches: on the ground layer, so the panel can stay overflow-hidden -->
+  <span class="absolute left-1/2 -translate-x-1/2 top-[13px] size-[34px] rounded-full bg-ground"></span>
+  <span class="absolute left-1/2 -translate-x-1/2 bottom-[13px] size-[34px] rounded-full bg-ground"></span>
+</section>
+</body>
+</html>
