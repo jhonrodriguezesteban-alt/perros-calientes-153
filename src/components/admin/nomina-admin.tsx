@@ -90,8 +90,8 @@ async function cargarNomina() {
     db().from("perfiles").select("id, nombre, rol").eq("activo", true).order("nombre"),
   ]);
   // Si la base aún no tiene la nómina por semanas (falta la migración), la página abre igual
-  const r = await db().from("nomina_acuerdos").select("persona, valor_turno, desde").order("persona");
-  const acuerdos = (r.error ? [] : r.data) as { persona: string; valor_turno: number; desde: string }[];
+  const r = await db().from("nomina_acuerdos").select("*").order("desde", { ascending: false });
+  const acuerdos = (r.error ? [] : r.data) as { persona: string; valor_turno: number; desde: string; hasta?: string | null }[];
   const semanas = new Map<string, Semana[]>();
   for (const a of acuerdos) {
     const w = await db().rpc("nomina_semanas", { p_persona: a.persona });
@@ -243,7 +243,8 @@ export function NominaAdmin() {
               <p className="-mt-2 mb-4 text-sm text-cafe-700">
                 {(() => {
                   const a = data.acuerdos.find((x) => x.persona === persona)!;
-                  return `${cop(a.valor_turno)} por turno, lunes a sábado (desde el ${fechaCorta(a.desde)}). Los turnos se cuentan con los días que se abrió la caja. Los vales cuentan como pago de su semana.`;
+                  const periodo = a.hasta ? `del ${fechaCorta(a.desde)} al ${fechaCorta(a.hasta)}` : `desde el ${fechaCorta(a.desde)}`;
+                  return `${cop(a.valor_turno)} por turno, lunes a sábado (${periodo}). Los turnos se cuentan con los días que se abrió la caja. Los vales cuentan como pago de su semana.`;
                 })()}
               </p>
               {semanas.length === 0 ? (
@@ -342,6 +343,8 @@ export function NominaAdmin() {
   );
 }
 
+/** 3.5 → "3½" */
+const textoTurnos = (n: number) => (n % 1 ? `${Math.floor(n) || ""}½` : String(n));
 const rango = (w: Semana) => `${fechaCorta(w.desde)} al ${fechaCorta(w.hasta)}`;
 
 /** Una semana de nómina: lo ganado, vales y pagos, y cuánto falta. */
@@ -379,7 +382,7 @@ function TarjetaSemana({
       <dl className="numeros mt-3 space-y-1 text-sm">
         <div className="flex justify-between gap-2">
           <dt>
-            {w.especial ? "Nómina acordada" : `${w.turnos} ${w.turnos === 1 ? "turno" : "turnos"} × ${cop(w.valor_turno ?? 0)}`}
+            {w.especial ? "Nómina acordada" : `${textoTurnos(w.turnos ?? 0)} ${w.turnos === 1 ? "turno" : "turnos"} × ${cop(w.valor_turno ?? 0)}`}
             {!w.especial && w.turnos !== w.turnos_caja && <span className="text-cafe-700"> (la caja dice {w.turnos_caja})</span>}
           </dt>
           <dd className="font-semibold">{cop(w.devengado)}</dd>
@@ -452,15 +455,15 @@ function ModalTurnos({ persona, semana, alCerrar, alGuardar }: { persona: string
       }
     >
       <p className="mb-4 text-sm text-cafe-700">
-        Según la caja, {persona} trabajó {semana.turnos_caja} {semana.turnos_caja === 1 ? "día" : "días"} esa semana. Cámbialo si faltó o trabajó un
-        día sin abrir caja.
+        Según la caja, {persona} trabajó {semana.turnos_caja} {semana.turnos_caja === 1 ? "día" : "días"} esa semana. Cámbialo si faltó, trabajó un
+        día sin abrir caja o hizo medio turno (½).
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo etiqueta="Turnos trabajados">
           <Selector value={turnos} onChange={(e) => setTurnos(e.target.value)}>
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+            {Array.from({ length: 15 }, (_, i) => i / 2).map((n) => (
               <option key={n} value={n}>
-                {n}
+                {textoTurnos(n)}
               </option>
             ))}
           </Selector>
