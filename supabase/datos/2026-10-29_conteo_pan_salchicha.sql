@@ -4,7 +4,10 @@
 --   perdieron 2 que estaban en el horno.
 -- Pan brioche: se dejan 5 bolsas completas × 8 = 40. La bolsa abierta
 --   estaba maltratada y se pierde (con el pan que ya se iba a perder).
--- La app queda en el conteo; la diferencia sale como merma con su motivo.
+-- El conteo se hizo antes de abrir el 29: a lo contado se le resta lo que
+-- se vendió desde ese día (si el conteo fue después de vender, poner
+-- v_desde en una fecha futura). La app queda en el conteo; la diferencia
+-- sale como merma con su motivo.
 -- Al final: tabla de pan y salchicha y el reporte de todo el inventario.
 -- Se puede correr más de una vez.
 -- =====================================================================
@@ -13,8 +16,12 @@ declare
   r       record;
   v_falta numeric;
   v_parte numeric;
+  v_desde date := '2026-10-29';  -- día del conteo, antes de abrir
 begin
-  for r in select i.id, i.nombre, i.stock_actual, i.costo_unitario, x.real, x.motivo, x.cant_motivo
+  for r in select i.id, i.nombre, i.stock_actual, i.costo_unitario, x.motivo, x.cant_motivo,
+                  x.real + coalesce((select sum(m.cantidad) from movimientos_inventario m
+                                      where m.insumo_id = i.id and m.tipo in ('consumo_venta', 'reverso_venta')
+                                        and (m.creado_en at time zone 'America/Bogota')::date >= v_desde), 0) as real
              from (values ('Salchicha americana', 51, 'Conteo 29-oct: 2 salchichas que se perdieron en el horno', 2),
                           ('Pan brioche', 40, 'Conteo 29-oct: bolsa abierta maltratada que se pierde (y el pan que se iba a perder)', 9))
                     x(nombre, real, motivo, cant_motivo)
@@ -49,7 +56,9 @@ mov as (
          -sum(m.cantidad) filter (where m.tipo in ('consumo_venta', 'reverso_venta') and m.creado_en > coalesce(k.en, '-infinity')) as vendido,
          -sum(m.cantidad) filter (where m.nota like 'Conteo 29-oct%' and m.cantidad < 0 and m.nota not like '%diferencia%')          as perdida_conocida,
          -sum(m.cantidad) filter (where m.nota like 'Conteo 29-oct: diferencia%')                                                     as faltante,
-         sum(m.cantidad) filter (where m.nota like 'Conteo 29-oct%')                                                                  as ajuste_hoy
+         sum(m.cantidad) filter (where m.nota like 'Conteo 29-oct%')                                                                  as ajuste_hoy,
+         -sum(m.cantidad) filter (where m.tipo in ('consumo_venta', 'reverso_venta')
+                                    and (m.creado_en at time zone 'America/Bogota')::date >= '2026-10-29')                      as vendido_hoy
     from movimientos_inventario m left join corte k on k.insumo_id = m.insumo_id
    group by 1)
 select i.nombre                                                   as "Producto",
@@ -58,7 +67,9 @@ select i.nombre                                                   as "Producto",
        round(i.stock_actual - coalesce(m.ajuste_hoy, 0))          as "Decía la app",
        round(coalesce(m.perdida_conocida, 0))                     as "Perdido (horno / bolsa)",
        round(coalesce(m.faltante, 0))                             as "Faltante sin explicar",
-       round(i.stock_actual)                                      as "Conteo real hoy",
+       round(i.stock_actual + coalesce(m.vendido_hoy, 0))         as "Conteo (antes de abrir)",
+       round(coalesce(m.vendido_hoy, 0))                          as "Vendido desde el 29",
+       round(i.stock_actual)                                      as "Hay ahora",
        round(-coalesce(m.ajuste_hoy, 0) * i.costo_unitario)       as "Valor perdido"
   from i left join mov m on m.insumo_id = i.id
  order by 1;
