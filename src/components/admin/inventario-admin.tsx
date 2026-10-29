@@ -183,7 +183,7 @@ export function InventarioAdmin() {
             </div>
             {minimos && (
               <p className="mb-3 rounded-2xl bg-mostaza-100/60 px-4 py-3 text-sm ring-2 ring-mostaza">
-                Escribe el <strong>mínimo</strong> de cada insumo: cuando quede eso o menos, a Andrea le sale el aviso de pedirlo. Marca{" "}
+                Escribe el <strong>mínimo</strong> de cada insumo: cuando quede eso o menos, a la empleada le sale el aviso de pedirlo. Marca{" "}
                 <strong>Ocultar</strong> en los que no quieres que vea cuánto queda (solo le sale el aviso).
               </p>
             )}
@@ -199,7 +199,7 @@ export function InventarioAdmin() {
                       <th className="px-2 py-2">Insumo</th>
                       <th className="px-2 py-2 text-right">Hay</th>
                       <th className="px-2 py-2 text-right">Mínimo</th>
-                      {minimos && <th className="px-2 py-2 text-center">Ocultar a Andrea</th>}
+                      {minimos && <th className="px-2 py-2 text-center">Ocultar a la empleada</th>}
                       <th className="px-2 py-2 text-right">Costo</th>
                       <th className="px-2 py-2 text-right">Valor</th>
                       <th className="px-2 py-2" />
@@ -233,7 +233,7 @@ export function InventarioAdmin() {
                               {i.stock_oculto && (
                                 <Insignia>
                                   <EyeOff className="mr-1 inline size-3" />
-                                  Oculto a Andrea
+                                  Oculto a la empleada
                                 </Insignia>
                               )}
                               {!i.activo && <Insignia>Inactivo</Insignia>}
@@ -259,7 +259,7 @@ export function InventarioAdmin() {
                               <td className="px-2 py-2 text-center">
                                 <input
                                   type="checkbox"
-                                  aria-label={`Ocultar ${i.nombre} a Andrea`}
+                                  aria-label={`Ocultar ${i.nombre} a la empleada`}
                                   className="size-5 accent-cafe"
                                   checked={minimos.get(i.id)?.oculto ?? false}
                                   onChange={(e) =>

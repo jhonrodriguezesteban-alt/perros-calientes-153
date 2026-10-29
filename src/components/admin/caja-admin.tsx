@@ -120,7 +120,7 @@ export function CajaAdmin() {
           <Tarjeta>
             <Subtitulo>Cierres de caja</Subtitulo>
             {data.cierres.length === 0 ? (
-              <Vacio>Todavía no hay cierres. Andrea finaliza el día desde el POS → Caja → Finalizar día.</Vacio>
+              <Vacio>Todavía no hay cierres. La empleada finaliza el día desde el POS → Caja → Finalizar día.</Vacio>
             ) : (
               <ul className="divide-y divide-cafe-100">
                 {data.cierres.map((c) => (
@@ -323,7 +323,7 @@ function ModalCorregir({ cierre, alCerrar, alGuardar }: { cierre: Cierre; alCerr
           <EntradaPesos valor={nequi} alCambiar={setNequi} />
         </Campo>
         <Campo etiqueta="¿Por qué se corrige?" className="sm:col-span-2">
-          <Entrada value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej. Andrea no contó la base; eran $16.000" />
+          <Entrada value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej. No se contó la base; eran $16.000" />
         </Campo>
       </div>
       {error && <p className="mt-3 font-semibold text-rojo">{error}</p>}

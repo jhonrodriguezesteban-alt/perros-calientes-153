@@ -470,7 +470,7 @@ export function ComprasAdmin({ solicitudInicial, retiroInicial }: { solicitudIni
               )}
               {pagadoCon === "caja" && fecha === hoyBogota() && (
                 <p className="mt-2 text-sm text-cafe-700">
-                  Sale de la caja de hoy como retiro, para que el cierre del día cuadre. Si Andrea ya sacó esa plata con un retiro, mejor
+                  Sale de la caja de hoy como retiro, para que el cierre del día cuadre. Si la empleada ya sacó esa plata con un retiro, mejor
                   regístrala desde Caja → Retiros → “Registrar”, para no descontarla dos veces.
                 </p>
               )}

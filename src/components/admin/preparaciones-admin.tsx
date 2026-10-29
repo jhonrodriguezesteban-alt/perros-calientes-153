@@ -28,7 +28,7 @@ export function TarjetaPreparaciones({ insumos, alCambiar }: { insumos: Insumo[]
         Preparaciones
       </Subtitulo>
       <p className="-mt-2 mb-4 text-sm text-cafe-700">
-        Insumos que se hacen con otros. Cada tanda descuenta los ingredientes y suma lo preparado con su costo. Andrea también las registra desde el
+        Insumos que se hacen con otros. Cada tanda descuenta los ingredientes y suma lo preparado con su costo. La empleada también las registra desde el
         POS (botón “Preparar”).
       </p>
       {error && <MensajeError>{error}</MensajeError>}

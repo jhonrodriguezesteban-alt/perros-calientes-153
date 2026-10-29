@@ -30,7 +30,7 @@ export function SolicitudesAdmin() {
   const [respuesta, setRespuesta] = useState("");
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
 
-  // En vivo: cuando Andrea pide algo, aparece aquí sin recargar.
+  // En vivo: cuando la empleada pide algo, aparece aquí sin recargar.
   useEffect(() => {
     const supabase = db();
     const canal = supabase
@@ -62,7 +62,7 @@ export function SolicitudesAdmin() {
 
   return (
     <div className="space-y-6">
-      <Encabezado titulo="Solicitudes" descripcion="Lo que Andrea pide desde la tablet. Cómpralo o descártalo; ella ve la respuesta." />
+      <Encabezado titulo="Solicitudes" descripcion="Lo que la empleada pide desde la tablet. Cómpralo o descártalo; ella ve la respuesta." />
       {cargando && !data && <Cargando />}
       {error && <MensajeError>{error}</MensajeError>}
       {errorAccion && <MensajeError>{errorAccion}</MensajeError>}
@@ -107,7 +107,7 @@ export function SolicitudesAdmin() {
                         <Entrada
                           value={respuesta}
                           onChange={(e) => setRespuesta(e.target.value)}
-                          placeholder="Motivo para Andrea (opcional): ya hay, llega mañana…"
+                          placeholder="Motivo para la empleada (opcional): ya hay, llega mañana…"
                           className="min-w-64 flex-1"
                         />
                         <Boton variante="peligro" onClick={() => descartar(s.id)}>

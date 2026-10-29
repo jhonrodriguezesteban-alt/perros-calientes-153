@@ -613,7 +613,7 @@ function ModalMovimiento({
               setSinDescontar(new Set());
               if (tipo === "nomina") setBruto(movimientos.find((m) => m.tipo === "nomina" && m.persona === e.target.value.trim())?.bruto ?? null);
             }}
-            placeholder="Ej. Andrea"
+            placeholder="Ej. Fernanda"
           />
           <datalist id="personas-nomina">
             {(tipo === "abono" ? [...prestamos.keys()] : nombres).map((n) => (
