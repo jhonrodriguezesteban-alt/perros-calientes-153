@@ -68,7 +68,7 @@ export function CatalogoAdmin() {
     <div className="space-y-6">
       <Encabezado
         titulo="Menú"
-        descripcion="Productos y toppings que ve Andrea en la tablet. Cada uno con su receta, para saber cuánto cuesta y cuánto deja."
+        descripcion="Productos y toppings que se ven en la tablet. Cada uno con su receta, para saber cuánto cuesta y cuánto deja."
         accion={
           <label className="flex items-center gap-2 font-etiqueta text-sm font-semibold">
             <input type="checkbox" className="size-5 accent-cafe" checked={verInactivos} onChange={(e) => setVerInactivos(e.target.checked)} />

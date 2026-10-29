@@ -20,7 +20,7 @@ type Preferencia = "ventas" | "cierres" | "solicitudes" | "caja";
 const PREFERENCIAS: { id: Preferencia; nombre: string; ayuda: string }[] = [
   { id: "ventas", nombre: "Cada venta", ayuda: "Número, valor, cómo pagó y qué se llevó" },
   { id: "cierres", nombre: "Cierre de caja", ayuda: "Lo vendido y si cuadró el efectivo y los bancos" },
-  { id: "solicitudes", nombre: "Solicitudes de insumos", ayuda: "Cuando Andrea pide algo" },
+  { id: "solicitudes", nombre: "Solicitudes de insumos", ayuda: "Cuando la empleada pide algo" },
   { id: "caja", nombre: "Movimientos de caja", ayuda: "Apertura, retiros y ventas anuladas" },
 ];
 

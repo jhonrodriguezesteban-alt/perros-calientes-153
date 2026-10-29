@@ -289,7 +289,7 @@ function FormAbrir({
       <Volver onClick={alVolver} />
       {esSocio && (
         <p className="mb-4 rounded-2xl bg-mostaza-100 px-4 py-3 text-sm font-semibold ring-2 ring-mostaza">
-          Vas a abrir la caja como socio. Si Andrea va a atender hoy, mejor que la abra ella desde la tablet con la base que recibe.
+          Vas a abrir la caja como socio. Si la empleada va a atender hoy, mejor que la abra ella desde la tablet con la base que recibe.
         </p>
       )}
       {ultimo && (
@@ -456,7 +456,7 @@ function FormRetiro({ alVolver, alListo }: { alVolver: () => void; alListo: (men
             <input
               value={tercero}
               onChange={(e) => setTercero(e.target.value)}
-              placeholder={tipo === "compra" ? "Ej. Ara, tienda de la esquina" : tipo === "vale" ? "Ej. Andrea" : tipo === "entrega" ? "Ej. Jhon" : "Ej. Tienda, mensajero…"}
+              placeholder={tipo === "compra" ? "Ej. Ara, tienda de la esquina" : tipo === "vale" ? "Ej. Fernanda" : tipo === "entrega" ? "Ej. Jhon" : "Ej. Tienda, mensajero…"}
               autoComplete="off"
               className="h-14 w-full rounded-2xl bg-crema px-4 text-lg ring-2 ring-cafe-100 outline-none focus:ring-cafe"
             />
